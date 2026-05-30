@@ -1,0 +1,51 @@
+# === Android/Gradle ===
+.gradle/
+build/
+!**/src/main/**/build/
+*.apk
+*.aab
+*.iml
+*.jks
+*.keystore
+.local.properties
+captured/
+gradle-app.setting
+*.hprof
+
+# === Kotlin ===
+*.class
+*.kt_module
+
+# === IDE ===
+.idea/
+*.ipr
+*.iws
+*.iml
+.vs/
+
+# === Generated (Hilt, Kapt) ===
+**/build/generated/
+**/kapt/
+**/.kotlin/
+
+# === Intermediates ===
+**/build/intermediates/
+**/build/outputs/
+**/build/tmp/
+
+# === Backend (Node/Prisma) ===
+backend/node_modules/
+backend/dist/
+backend/.env
+*.log
+
+# === System files ===
+.DS_Store
+Thumbs.db
+
+# === Frontend submodule fix ===
+frontend/.git
+
+backend/dev.db
+local.properties
+app/google-services.json
