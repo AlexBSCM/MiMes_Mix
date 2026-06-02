@@ -23,9 +23,12 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # Инжектируем google-services.json из GitHub Secrets
     - name: Inject google-services.json
-      run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+      run: |
+        mkdir -p app
+        cat << 'EOF' > app/google-services.json
+        ${{ secrets.GOOGLE_SERVICES_JSON }}
+        EOF
 
     - name: Build with Gradle
       run: ./gradlew assembleDebug --no-daemon
