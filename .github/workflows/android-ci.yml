@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Включаем поддержку Node.js 24, чтобы убрать предупреждение
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
     - name: Checkout code
@@ -30,7 +33,6 @@ jobs:
         ${{ secrets.GOOGLE_SERVICES_JSON }}
         EOF
 
-    # === НОВЫЙ ШАГ: Запуск тестов ===
     - name: Run Unit Tests
       run: ./gradlew test --no-daemon
 
