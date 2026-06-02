@@ -1,4 +1,4 @@
-﻿name: Android CI (Auto Build)
+﻿name: Android CI (Auto Build & Check)
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Включаем поддержку Node.js 24, чтобы убрать предупреждение
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -32,6 +31,11 @@ jobs:
         cat << 'EOF' > app/google-services.json
         ${{ secrets.GOOGLE_SERVICES_JSON }}
         EOF
+
+    # === ШАГ 3: Проверка качества кода (Ktlint) ===
+    - name: Run Ktlint Check
+      run: ./gradlew ktlintCheck --no-daemon
+      continue-on-error: true # Не прерываем сборку, если есть предупреждения стиля, а просто логируем их
 
     - name: Run Unit Tests
       run: ./gradlew test --no-daemon
