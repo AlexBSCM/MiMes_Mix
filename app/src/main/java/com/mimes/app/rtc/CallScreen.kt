@@ -160,7 +160,7 @@ fun CallScreen(
                         icon = "✕",
                         label = "Завершить",
                         color = Color(0xFFE53935),
-                        onClick = { viewModel.endCall() }
+                        onClick = { viewModel.endCall(); onEndCall() }
                     )
                 }
             }

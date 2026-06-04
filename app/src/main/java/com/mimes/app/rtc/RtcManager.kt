@@ -74,6 +74,10 @@ object RtcManager {
         listenForIncomingCalls()
     }
 
+    fun restartListening() {
+        listenForIncomingCalls()
+    }
+
     private fun createPeerConnection(observer: PeerConnection.Observer): PeerConnection? {
         val config = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -243,17 +247,17 @@ object RtcManager {
 
     private fun listenForIncomingCalls() {
         listenerRegistration?.remove()
-        val userId = Session.currentUserId
-        if (userId.isBlank()) return
-
         listenerRegistration = db.collection("calls")
-            .whereEqualTo("receiverId", userId)
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snap, _ ->
+                val myId = Session.currentUserId
+                if (myId.isBlank()) return@addSnapshotListener
                 snap?.documents?.forEach { doc ->
+                    val receiverId = doc.getString("receiverId") ?: return@forEach
+                    if (receiverId != myId) return@forEach
                     val callerId = doc.getString("callerId") ?: return@forEach
                     val callId = doc.id
-                    if (callerId != Session.currentUserId) {
+                    if (callerId != myId) {
                         _incomingCallFlow.tryEmit(Pair(callerId, callId))
                     }
                 }

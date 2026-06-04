@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mimes.app.rtc.RtcManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,10 @@ fun ChatListScreen(
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     var searchText by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        RtcManager.restartListening()
+    }
 
     LaunchedEffect(searchText) {
         viewModel.searchUsers(searchText.trim())
