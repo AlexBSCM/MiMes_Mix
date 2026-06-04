@@ -53,7 +53,7 @@ fun CallScreen(
     }
 
     LaunchedEffect(callState) {
-        if (callState is CallState.Ended || callState is CallState.Idle) {
+        if (callState is CallState.Ended) {
             onEndCall()
         }
     }

@@ -70,7 +70,9 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
                 val ts = msg.timestamp?.let { fmtTime(it) } ?: ""
 
                 if (lastRead != null && msg.timestamp?.after(lastRead.toDate()) == true) {
-                    ref.whereGreaterThan("timestamp", lastRead.toDate()).get()
+                    ref.whereGreaterThan("timestamp", lastRead.toDate())
+                        .whereNotEqualTo("senderId", Session.currentUserId)
+                        .get()
                         .addOnSuccessListener { snap ->
                             updateChat(chat.id, lastMsg, ts, snap.size())
                         }
