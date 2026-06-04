@@ -2,8 +2,10 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.mimes.app.ui.auth.Session
 import com.mimes.app.data.Message
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,41 +60,40 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
             }
     }
 
-    private fun fetchChatInfo(chat: Chat, lastRead: com.google.firebase.Timestamp?) {
-        db.collection("chats").document(chat.id).collection("messages")
-            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            .limit(1)
-            .get()
+    private fun fetchChatInfo(chat: Chat, lastRead: Timestamp?) {
+        val ref = db.collection("chats").document(chat.id).collection("messages")
+        ref.orderBy("timestamp", Query.Direction.DESCENDING).limit(1).get()
             .addOnSuccessListener { snapshot ->
                 if (snapshot.isEmpty) return@addOnSuccessListener
-                val msg = snapshot.documents[0].toObject(Message::class.java)
-                val lastMsg = msg?.text?.take(60)?.ifBlank { if (msg.hasFile) "Файл" else "" } ?: ""
-                val ts = msg?.timestamp?.let {
-                    val now = Calendar.getInstance()
-                    val msgCal = Calendar.getInstance().apply { time = it }
-                    if (now.get(Calendar.DAY_OF_YEAR) == msgCal.get(Calendar.DAY_OF_YEAR) &&
-                        now.get(Calendar.YEAR) == msgCal.get(Calendar.YEAR))
-                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
-                    else
-                        SimpleDateFormat("dd.MM", Locale.getDefault()).format(it)
-                } ?: ""
+                val msg = snapshot.documents[0].toObject(Message::class.java) ?: return@addOnSuccessListener
+                val lastMsg = if (msg.text.isNotBlank()) msg.text.take(60) else if (msg.hasFile) "Файл" else ""
+                val ts = msg.timestamp?.let { fmtTime(it) } ?: ""
 
-                var unread = 0
-                if (lastRead != null && msg?.timestamp != null) {
-                    unread = if (msg.timestamp.after(lastRead.toDate())) 1 else 0
-                    if (unread == 1) {
-                        db.collection("chats").document(chat.id).collection("messages")
-                            .whereGreaterThan("timestamp", lastRead.toDate())
-                            .get()
-                            .addOnSuccessListener { snap -> unread = snap.size() }
-                    }
-                }
-
-                _chats.value = _chats.value.map {
-                    if (it.id == chat.id) it.copy(lastMessage = lastMsg, timestamp = ts, unreadCount = unread)
-                    else it
+                if (lastRead != null && msg.timestamp?.after(lastRead.toDate()) == true) {
+                    ref.whereGreaterThan("timestamp", lastRead.toDate()).get()
+                        .addOnSuccessListener { snap ->
+                            updateChat(chat.id, lastMsg, ts, snap.size())
+                        }
+                } else {
+                    updateChat(chat.id, lastMsg, ts, 0)
                 }
             }
+    }
+
+    private fun updateChat(id: String, lastMsg: String, ts: String, unread: Int) {
+        _chats.value = _chats.value.map {
+            if (it.id == id) it.copy(lastMessage = lastMsg, timestamp = ts, unreadCount = unread) else it
+        }
+    }
+
+    private fun fmtTime(date: Date): String {
+        val now = Calendar.getInstance()
+        val cal = Calendar.getInstance().apply { time = date }
+        return if (now.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) &&
+            now.get(Calendar.YEAR) == cal.get(Calendar.YEAR))
+            SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+        else
+            SimpleDateFormat("dd.MM", Locale.getDefault()).format(date)
     }
 
     fun toggleSearch() {
