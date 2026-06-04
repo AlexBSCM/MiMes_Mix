@@ -70,12 +70,25 @@ object RtcManager {
 
         audioSource = peerConnectionFactory?.createAudioSource(audioConstraints)
         audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
-
-        listenForIncomingCalls()
     }
 
-    fun restartListening() {
-        listenForIncomingCalls()
+    fun listenForIncomingCalls() {
+        listenerRegistration?.remove()
+        listenerRegistration = db.collection("calls")
+            .whereEqualTo("status", "ringing")
+            .addSnapshotListener { snap, _ ->
+                val myId = Session.currentUserId
+                if (myId.isBlank()) return@addSnapshotListener
+                snap?.documents?.forEach { doc ->
+                    val receiverId = doc.getString("receiverId") ?: return@forEach
+                    if (receiverId != myId) return@forEach
+                    val callerId = doc.getString("callerId") ?: return@forEach
+                    val callId = doc.id
+                    if (callerId != myId) {
+                        _incomingCallFlow.tryEmit(Pair(callerId, callId))
+                    }
+                }
+            }
     }
 
     private fun createPeerConnection(observer: PeerConnection.Observer): PeerConnection? {
@@ -243,25 +256,6 @@ object RtcManager {
         currentPeerId = null
         pendingCandidates.clear()
         onStateChange?.invoke(CallState.Ended())
-    }
-
-    private fun listenForIncomingCalls() {
-        listenerRegistration?.remove()
-        listenerRegistration = db.collection("calls")
-            .whereEqualTo("status", "ringing")
-            .addSnapshotListener { snap, _ ->
-                val myId = Session.currentUserId
-                if (myId.isBlank()) return@addSnapshotListener
-                snap?.documents?.forEach { doc ->
-                    val receiverId = doc.getString("receiverId") ?: return@forEach
-                    if (receiverId != myId) return@forEach
-                    val callerId = doc.getString("callerId") ?: return@forEach
-                    val callId = doc.id
-                    if (callerId != myId) {
-                        _incomingCallFlow.tryEmit(Pair(callerId, callId))
-                    }
-                }
-            }
     }
 
     private fun listenForAnswer(callId: String, onStateChange: (CallState) -> Unit) {

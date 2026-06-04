@@ -37,7 +37,7 @@ fun ChatListScreen(
     var searchText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        RtcManager.restartListening()
+        RtcManager.listenForIncomingCalls()
     }
 
     LaunchedEffect(searchText) {
