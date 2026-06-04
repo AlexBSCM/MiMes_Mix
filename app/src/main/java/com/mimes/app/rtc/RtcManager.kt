@@ -38,14 +38,20 @@ object RtcManager {
     var currentCallId: String? = null
     var currentPeerId: String? = null
 
+    private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(replay = 0)
+    val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Pair<String, String>> = _incomingCallFlow
+
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
     )
 
     private var pendingCandidates = mutableListOf<IceCandidate>()
+    private var initialized = false
 
     fun initialize(context: Context) {
+        if (initialized) return
+        initialized = true
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
                 .setFieldTrials("")
@@ -64,6 +70,8 @@ object RtcManager {
 
         audioSource = peerConnectionFactory?.createAudioSource(audioConstraints)
         audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
+
+        listenForIncomingCalls()
     }
 
     private fun createPeerConnection(observer: PeerConnection.Observer): PeerConnection? {
@@ -233,11 +241,11 @@ object RtcManager {
         onStateChange?.invoke(CallState.Ended())
     }
 
-    fun listenForIncomingCalls(onRinging: (String, String) -> Unit) {
+    private fun listenForIncomingCalls() {
+        listenerRegistration?.remove()
         val userId = Session.currentUserId
         if (userId.isBlank()) return
 
-        listenerRegistration?.remove()
         listenerRegistration = db.collection("calls")
             .whereEqualTo("receiverId", userId)
             .whereEqualTo("status", "ringing")
@@ -246,7 +254,7 @@ object RtcManager {
                     val callerId = doc.getString("callerId") ?: return@forEach
                     val callId = doc.id
                     if (callerId != Session.currentUserId) {
-                        onRinging(callerId, callId)
+                        _incomingCallFlow.tryEmit(Pair(callerId, callId))
                     }
                 }
             }
@@ -306,5 +314,6 @@ object RtcManager {
         peerConnectionFactory = null
         listenerRegistration?.remove()
         listenerRegistration = null
+        initialized = false
     }
 }

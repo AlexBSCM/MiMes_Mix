@@ -17,10 +17,11 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         RtcManager.initialize(application)
-        RtcManager.listenForIncomingCalls { callerId, callId ->
-            _peerName.value = callerId
-            _callState.value = CallState.Ringing(callerId, callId)
-        }
+    }
+
+    fun incomingCall(callerId: String, callId: String) {
+        _peerName.value = callerId
+        _callState.value = CallState.Ringing(callerId, callId)
     }
 
     fun callUser(userId: String) {
@@ -38,7 +39,7 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
 
     fun rejectCall(callId: String) {
         RtcManager.rejectCall(callId)
-        _callState.value = CallState.Idle
+        _callState.value = CallState.Ended()
     }
 
     fun endCall() {
@@ -46,16 +47,9 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
         RtcManager.endCall(callId) { state ->
             _callState.value = state
         }
-        _callState.value = CallState.Idle
-    }
-
-    fun resetState() {
-        _callState.value = CallState.Idle
-        _peerName.value = ""
     }
 
     override fun onCleared() {
         super.onCleared()
-        RtcManager.release()
     }
 }

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
@@ -13,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.mimes.app.rtc.CallScreen
+import com.mimes.app.rtc.RtcManager
 import com.mimes.app.ui.auth.AuthScreen
 import com.mimes.app.ui.chat.ChatListScreen
 import com.mimes.app.ui.chatdetail.ChatScreen
@@ -40,6 +42,15 @@ sealed class Screen(val route: String) {
 
 @Composable
 fun NavigationGraph(navController: NavHostController, startDestination: String) {
+    LaunchedEffect(Unit) {
+        RtcManager.initialize(com.mimes.app.MiMesApp.instance)
+        RtcManager.incomingCallFlow.collect { (callerId, callId) ->
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute != Screen.Call.route && currentRoute != "incoming_call/{callerId}/{callId}") {
+                navController.navigate("incoming_call/${Uri.encode(callerId)}/${Uri.encode(callId)}")
+            }
+        }
+    }
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable(Screen.Auth.route) {
@@ -113,6 +124,25 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                 peerName = peerName,
                 onEndCall = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "incoming_call/{callerId}/{callId}",
+            arguments = listOf(
+                navArgument("callerId") { type = NavType.StringType },
+                navArgument("callId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val callerId = backStackEntry.arguments?.getString("callerId") ?: ""
+            val callId = backStackEntry.arguments?.getString("callId") ?: ""
+            CallScreen(
+                peerName = callerId,
+                isIncoming = true,
+                incomingCallId = callId,
+                onEndCall = {
+                    navController.popBackStack(Screen.ChatList.route, inclusive = false)
                 }
             )
         }

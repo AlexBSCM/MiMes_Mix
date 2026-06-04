@@ -25,17 +25,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun CallScreen(
     peerName: String = "",
+    isIncoming: Boolean = false,
+    incomingCallId: String = "",
     viewModel: CallViewModel = viewModel(),
     onEndCall: () -> Unit
 ) {
     val callState by viewModel.callState.collectAsState()
     val displayPeerName by viewModel.peerName.collectAsState()
-
-    LaunchedEffect(peerName) {
-        if (peerName.isNotBlank()) {
-            viewModel.callUser(if (peerName.startsWith("@")) peerName else "@$peerName")
-        }
-    }
     val context = LocalContext.current
 
     var hasMicPermission by remember {
@@ -49,6 +45,22 @@ fun CallScreen(
     LaunchedEffect(Unit) {
         if (!hasMicPermission) {
             permLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (isIncoming && incomingCallId.isNotBlank()) {
+            viewModel.incomingCall(if (peerName.startsWith("@")) peerName else "@$peerName", incomingCallId)
+        } else if (peerName.isNotBlank()) {
+            viewModel.callUser(if (peerName.startsWith("@")) peerName else "@$peerName")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        RtcManager.incomingCallFlow.collect { (callerId, callId) ->
+            if (callState is CallState.Idle) {
+                viewModel.incomingCall(callerId, callId)
+            }
         }
     }
 
