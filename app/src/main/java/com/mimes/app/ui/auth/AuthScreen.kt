@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
@@ -18,7 +19,7 @@ fun AuthScreen(
     onAuthSuccess: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
-    var email by remember { mutableStateOf(TextFieldValue("")) }
+    var login by remember { mutableStateOf(TextFieldValue("")) }
     var password by remember { mutableStateOf(TextFieldValue("")) }
     var isLoginMode by remember { mutableStateOf(true) }
 
@@ -55,11 +56,21 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
+                value = login,
+                onValueChange = { newValue ->
+                    val text = newValue.text
+                    login = when {
+                        text.isEmpty() || text == "@" -> TextFieldValue("")
+                        !text.startsWith("@") -> TextFieldValue(
+                            text = "@$text",
+                            selection = TextRange(text.length + 1)
+                        )
+                        else -> newValue
+                    }
+                },
+                label = { Text("Логин") },
+                placeholder = { Text("@username") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 enabled = authState !is AuthState.Loading
@@ -94,15 +105,15 @@ fun AuthScreen(
             Button(
                 onClick = {
                     if (isLoginMode) {
-                        viewModel.signIn(email.text.trim(), password.text)
+                        viewModel.signIn(login.text.trim(), password.text)
                     } else {
-                        viewModel.signUp(email.text.trim(), password.text)
+                        viewModel.signUp(login.text.trim(), password.text)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 enabled = authState !is AuthState.Loading &&
-                          email.text.isNotBlank() && password.text.isNotBlank()
+                          login.text.isNotBlank() && password.text.isNotBlank()
             ) {
                 if (authState is AuthState.Loading) {
                     CircularProgressIndicator(

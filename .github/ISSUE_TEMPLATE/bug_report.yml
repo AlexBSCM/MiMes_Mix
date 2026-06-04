@@ -1,0 +1,39 @@
+﻿name: 🐞 Сообщение об ошибке (Bug Report)
+description: Создайте отчёт, чтобы помочь нам улучшить проект
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что нашли время заполнить этот отчёт!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Что произошло?
+      description: Также расскажите, что вы ожидали увидеть.
+      placeholder: Расскажите нам, что вы видите!
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги для воспроизведения
+      description: Как нам повторить эту ошибку?
+      placeholder: |
+        1. Зайти в приложение
+        2. Нажать на кнопку "Войти"
+        3. Увидеть ошибку...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Платформа
+      description: Где произошла ошибка?
+      options:
+        - Android
+        - Backend (Node.js)
+        - Frontend (Web/Expo)
+    validations:
+      required: true
