@@ -12,6 +12,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.mimes.app.rtc.CallScreen
 import com.mimes.app.ui.auth.AuthScreen
 import com.mimes.app.ui.chat.ChatListScreen
 import com.mimes.app.ui.chatdetail.ChatScreen
@@ -28,6 +29,11 @@ sealed class Screen(val route: String) {
             val route = "chat/$chatId/$encodedName"
             Log.d(NAV_TAG, "Creating route: $route")
             return route
+        }
+    }
+    object Call : Screen("call/{peerName}") {
+        fun createRoute(peerName: String): String {
+            return "call/${Uri.encode(peerName)}"
         }
     }
 }
@@ -84,6 +90,11 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                     onBackClick = {
                         Log.d(NAV_TAG, "Back from chat")
                         navController.popBackStack()
+                    },
+                    onCallClick = {
+                        Log.d(NAV_TAG, "Audio call to ")
+                        val encodedPeer = Uri.encode(peerName.replace("@", ""))
+                        navController.navigate(Screen.Call.createRoute(encodedPeer))
                     }
                 )
             } else {
@@ -91,6 +102,19 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                     Text("Ошибка загрузки чата: missing data")
                 }
             }
+        }
+
+        composable(
+            route = Screen.Call.route,
+            arguments = listOf(navArgument("peerName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val peerName = backStackEntry.arguments?.getString("peerName") ?: ""
+            CallScreen(
+                peerName = peerName,
+                onEndCall = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

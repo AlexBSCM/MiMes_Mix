@@ -87,8 +87,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    // WebRTC (for later stages - commented out for now since it is only needed in Stage 6)
-    // implementation("org.webrtc:google-webrtc:1.0.32006")
+    // WebRTC
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

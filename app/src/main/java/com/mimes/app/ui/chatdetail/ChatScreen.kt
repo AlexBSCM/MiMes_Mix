@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,7 @@ fun ChatScreen(
     chatId: String,
     peerName: String,
     onBackClick: () -> Unit,
+    onCallClick: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -112,6 +114,13 @@ fun ChatScreen(
                         onBackClick()
                     }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+                actions = {
+                    if (peerName != "Бот") {
+                        IconButton(onClick = onCallClick) {
+                            Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
