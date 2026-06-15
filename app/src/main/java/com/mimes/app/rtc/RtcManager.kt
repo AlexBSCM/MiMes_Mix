@@ -83,9 +83,10 @@ object RtcManager {
 
         try {
             // Delete ALL stale "ringing" calls before setting up the listener
+            // Use Source.SERVER to bypass local cache (stale docs live on server)
             val stale = db.collection("calls")
                 .whereEqualTo("status", "ringing")
-                .get()
+                .get(com.google.firebase.firestore.Source.SERVER)
                 .await()
             stale.documents.forEach { doc ->
                 if (doc.getString("receiverId") == myId || doc.getString("callerId") == myId) {
@@ -275,7 +276,7 @@ object RtcManager {
 
     fun endCall(callId: String, onStateChange: ((CallState) -> Unit)? = null) {
         db.collection("calls").document(callId).delete()
-        handledCallIds.clear()
+        handledCallIds.add(callId)
         peerConnection?.close()
         peerConnection = null
         answerListener?.remove()
