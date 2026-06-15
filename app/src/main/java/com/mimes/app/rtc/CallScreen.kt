@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,14 +54,6 @@ fun CallScreen(
             viewModel.incomingCall(if (peerName.startsWith("@")) peerName else "@$peerName", incomingCallId)
         } else if (peerName.isNotBlank()) {
             viewModel.callUser(if (peerName.startsWith("@")) peerName else "@$peerName")
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        RtcManager.incomingCallFlow.collect { (callerId, callId) ->
-            if (callState is CallState.Idle) {
-                viewModel.incomingCall(callerId, callId)
-            }
         }
     }
 
@@ -178,7 +171,8 @@ private fun CallButton(
     onClick: () -> Unit
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
     ) {
         Box(
             modifier = Modifier

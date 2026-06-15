@@ -80,7 +80,7 @@ object RtcManager {
         val myId = Session.currentUserId
         if (myId.isBlank()) return
 
-        // Clean up any stale "ringing" calls for this user from previous sessions
+        // First clean up stale "ringing" calls, then set up the listener
         db.collection("calls")
             .whereEqualTo("receiverId", myId)
             .whereEqualTo("status", "ringing")
@@ -89,8 +89,16 @@ object RtcManager {
                 snap.documents.forEach { doc ->
                     doc.reference.delete()
                 }
+                // Only set up listener AFTER cleanup to avoid stale events
+                setupIncomingCallListener(myId)
             }
+            .addOnFailureListener {
+                // If cleanup fails, still set up the listener
+                setupIncomingCallListener(myId)
+            }
+    }
 
+    private fun setupIncomingCallListener(myId: String) {
         incomingCallListener = db.collection("calls")
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snap, _ ->
