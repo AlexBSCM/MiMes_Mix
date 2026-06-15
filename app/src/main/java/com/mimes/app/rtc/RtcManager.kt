@@ -110,7 +110,6 @@ object RtcManager {
         )
         videoCapturer?.startCapture(1280, 720, 30)
         videoTrack = peerConnectionFactory?.createVideoTrack("video_track", videoSource)
-        peerConnection?.addTrack(videoTrack)
     }
 
     fun stopVideo() {
@@ -244,8 +243,8 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = createPeerConnection(observer)?.apply {
             audioTrack?.let { addTrack(it) }
-            if (isVideoCall) {
-                if (context != null) startVideo(context)
+            if (isVideoCall && context != null) {
+                startVideo(context)
                 videoTrack?.let { addTrack(it) }
             }
             createOffer(object : SdpObserver {
@@ -316,9 +315,8 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = pc
         audioTrack?.let { pc?.addTrack(it) }
-        if (isVideoCall) {
-            if (context != null) startVideo(context)
-            videoTrack?.let { pc?.addTrack(it) }
+        if (isVideoCall && context != null) {
+            startVideo(context)
         }
 
         db.collection("calls").document(callId).collection("offer").document("offer").get()
