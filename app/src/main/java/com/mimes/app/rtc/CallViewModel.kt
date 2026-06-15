@@ -35,7 +35,8 @@ class CallViewModel @Inject constructor(application: Application) : AndroidViewM
     fun callUser(userId: String, video: Boolean = false) {
         _peerName.value = userId
         _isVideo.value = video
-        RtcManager.startCall(userId, video) { state ->
+        val ctx = getApplication<Application>()
+        RtcManager.startCall(userId, video, ctx) { state ->
             _callState.value = state
         }
     }

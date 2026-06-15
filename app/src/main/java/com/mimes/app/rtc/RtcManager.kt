@@ -188,7 +188,7 @@ object RtcManager {
         return peerConnectionFactory?.createPeerConnection(config, observer)
     }
 
-    fun startCall(receiverId: String, isVideo: Boolean = false, onStateChange: (CallState) -> Unit) {
+    fun startCall(receiverId: String, isVideo: Boolean = false, context: Context? = null, onStateChange: (CallState) -> Unit) {
         val callId = "call_${UUID.randomUUID()}"
         currentCallId = callId
         currentPeerId = receiverId
@@ -232,13 +232,20 @@ object RtcManager {
             override fun onRemoveStream(stream: MediaStream) {}
             override fun onDataChannel(channel: DataChannel) {}
             override fun onRenegotiationNeeded() {}
-            override fun onAddTrack(track: RtpReceiver, streams: Array<out MediaStream>) {}
+            override fun onAddTrack(track: RtpReceiver, streams: Array<out MediaStream>) {
+                val remoteTrack = track.track() as? VideoTrack
+                if (remoteTrack != null) {
+                    Log.d(TAG, "Remote video track received")
+                    remoteTrack.addSink(remoteRenderer)
+                }
+            }
         }
 
         peerConnection?.close()
         peerConnection = createPeerConnection(observer)?.apply {
             audioTrack?.let { addTrack(it) }
             if (isVideoCall) {
+                if (context != null) startVideo(context)
                 videoTrack?.let { addTrack(it) }
             }
             createOffer(object : SdpObserver {
@@ -296,7 +303,13 @@ object RtcManager {
             override fun onRemoveStream(stream: MediaStream) {}
             override fun onDataChannel(channel: DataChannel) {}
             override fun onRenegotiationNeeded() {}
-            override fun onAddTrack(track: RtpReceiver, streams: Array<out MediaStream>) {}
+            override fun onAddTrack(track: RtpReceiver, streams: Array<out MediaStream>) {
+                val remoteTrack = track.track() as? VideoTrack
+                if (remoteTrack != null) {
+                    Log.d(TAG, "Remote video track received")
+                    remoteTrack.addSink(remoteRenderer)
+                }
+            }
         }
 
         val pc = createPeerConnection(observer)
@@ -304,6 +317,7 @@ object RtcManager {
         peerConnection = pc
         audioTrack?.let { pc?.addTrack(it) }
         if (isVideoCall) {
+            if (context != null) startVideo(context)
             videoTrack?.let { pc?.addTrack(it) }
         }
 
