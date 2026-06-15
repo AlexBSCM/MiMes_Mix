@@ -31,14 +31,15 @@ object RtcManager {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
-    private var localAudioTrack: AudioTrack? = null
 
-    private var listenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+    private var incomingCallListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var answerListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var candidateListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     var currentCallId: String? = null
     var currentPeerId: String? = null
 
-    private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(replay = 0)
+    private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(replay = 1)
     val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Pair<String, String>> = _incomingCallFlow
 
     private val iceServers = listOf(
@@ -73,8 +74,8 @@ object RtcManager {
     }
 
     fun listenForIncomingCalls() {
-        listenerRegistration?.remove()
-        listenerRegistration = db.collection("calls")
+        incomingCallListener?.remove()
+        incomingCallListener = db.collection("calls")
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snap, _ ->
                 val myId = Session.currentUserId
@@ -171,14 +172,14 @@ object RtcManager {
     fun acceptCall(callId: String, callerId: String, onStateChange: (CallState) -> Unit) {
         currentCallId = callId
         currentPeerId = callerId
-        onStateChange(CallState.Connected(callId, callerId))
-        db.collection("calls").document(callId).update("status", "connected")
+        db.collection("calls").document(callId).update("status", "accepted")
 
         val observer = object : PeerConnection.Observer {
             override fun onSignalingChange(state: PeerConnection.SignalingState) {}
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
                 if (state == PeerConnection.IceConnectionState.CONNECTED) {
                     onStateChange(CallState.Connected(callId, callerId))
+                    db.collection("calls").document(callId).update("status", "connected")
                 }
                 if (state == PeerConnection.IceConnectionState.DISCONNECTED ||
                     state == PeerConnection.IceConnectionState.FAILED) {
@@ -215,6 +216,7 @@ object RtcManager {
                 val sd = SessionDescription(SessionDescription.Type.OFFER, sdp)
                 pc?.setRemoteDescription(object : SdpObserver {
                     override fun onSetSuccess() {
+                        addPendingCandidates()
                         pc?.createAnswer(object : SdpObserver {
                             override fun onCreateSuccess(sdp: SessionDescription) {
                                 pc?.setLocalDescription(object : SdpObserver {
@@ -250,8 +252,10 @@ object RtcManager {
         db.collection("calls").document(callId).update("status", "ended")
         peerConnection?.close()
         peerConnection = null
-        listenerRegistration?.remove()
-        listenerRegistration = null
+        answerListener?.remove()
+        answerListener = null
+        candidateListener?.remove()
+        candidateListener = null
         currentCallId = null
         currentPeerId = null
         pendingCandidates.clear()
@@ -259,12 +263,14 @@ object RtcManager {
     }
 
     private fun listenForAnswer(callId: String, onStateChange: (CallState) -> Unit) {
-        db.collection("calls").document(callId).collection("answer").document("answer")
+        answerListener?.remove()
+        answerListener = db.collection("calls").document(callId).collection("answer").document("answer")
             .addSnapshotListener { snap, _ ->
                 val sdp = snap?.getString("sdp") ?: return@addSnapshotListener
                 val sd = SessionDescription(SessionDescription.Type.ANSWER, sdp)
                 peerConnection?.setRemoteDescription(object : SdpObserver {
                     override fun onSetSuccess() {
+                        addPendingCandidates()
                         listenForCandidates(callId, Session.currentUserId)
                     }
                     override fun onSetFailure(msg: String) {}
@@ -275,7 +281,8 @@ object RtcManager {
     }
 
     private fun listenForCandidates(callId: String, myId: String) {
-        db.collection("calls").document(callId).collection("candidates")
+        candidateListener?.remove()
+        candidateListener = db.collection("calls").document(callId).collection("candidates")
             .whereNotEqualTo("from", myId)
             .addSnapshotListener { snap, _ ->
                 snap?.documentChanges?.forEach { change ->
@@ -302,16 +309,15 @@ object RtcManager {
     }
 
     fun release() {
-        peerConnection?.close()
-        peerConnection = null
+        currentCallId?.let { endCall(it) }
         audioTrack?.dispose()
         audioTrack = null
         audioSource?.dispose()
         audioSource = null
         peerConnectionFactory?.dispose()
         peerConnectionFactory = null
-        listenerRegistration?.remove()
-        listenerRegistration = null
+        incomingCallListener?.remove()
+        incomingCallListener = null
         initialized = false
     }
 }

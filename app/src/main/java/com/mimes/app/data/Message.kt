@@ -2,9 +2,10 @@
 
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
+import java.util.UUID
 
 data class Message(
-    val id: String = "",
+    val id: String = UUID.randomUUID().toString(),
     val text: String = "",
     val senderId: String = "",
     val receiverId: String = "", // Для бота это будет "bot"

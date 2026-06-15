@@ -2,12 +2,13 @@ package com.mimes.app.rtc
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class CallViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class CallViewModel @Inject constructor(application: Application) : AndroidViewModel(application) {
 
     private val _callState = MutableStateFlow<CallState>(CallState.Idle)
     val callState: StateFlow<CallState> = _callState

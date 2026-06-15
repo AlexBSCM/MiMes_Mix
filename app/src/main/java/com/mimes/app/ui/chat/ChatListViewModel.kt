@@ -20,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 class ChatListViewModel @Inject constructor() : ViewModel() {
 
     private val db = FirebaseFirestore.getInstance()
+    private var contactsListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
     val chats: StateFlow<List<Chat>> = _chats
@@ -38,7 +39,8 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
         val userId = Session.currentUserId
         if (userId.isBlank()) return
 
-        db.collection("users").document(userId)
+        contactsListener?.remove()
+        contactsListener = db.collection("users").document(userId)
             .addSnapshotListener { snapshot, _ ->
                 val contacts = snapshot?.get("contacts") as? List<String> ?: emptyList()
                 val lastReadMap = snapshot?.get("lastReadTimestamps") as? Map<String, Any> ?: emptyMap()
@@ -123,6 +125,12 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
             .addOnFailureListener {
                 _searchResults.value = emptyList()
             }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        contactsListener?.remove()
+        contactsListener = null
     }
 
     fun addContact(contactUserId: String) {

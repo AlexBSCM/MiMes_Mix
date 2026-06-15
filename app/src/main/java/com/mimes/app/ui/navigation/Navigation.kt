@@ -107,9 +107,8 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                         navController.popBackStack()
                     },
                     onCallClick = {
-                        Log.d(NAV_TAG, "Audio call to ")
-                        val encodedPeer = Uri.encode(peerName.replace("@", ""))
-                        navController.navigate(Screen.Call.createRoute(encodedPeer))
+                        Log.d(NAV_TAG, "Audio call to $peerName")
+                        navController.navigate(Screen.Call.createRoute(peerName.removePrefix("@")))
                     }
                 )
             } else {
