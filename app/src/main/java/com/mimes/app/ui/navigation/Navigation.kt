@@ -18,6 +18,7 @@ import com.mimes.app.rtc.RtcManager
 import com.mimes.app.ui.auth.AuthScreen
 import com.mimes.app.ui.chat.ChatListScreen
 import com.mimes.app.ui.chatdetail.ChatScreen
+import com.mimes.app.ui.profile.ProfileScreen
 import android.net.Uri
 
 private const val NAV_TAG = "Navigation"
@@ -25,6 +26,7 @@ private const val NAV_TAG = "Navigation"
 sealed class Screen(val route: String) {
     object Auth : Screen("auth")
     object ChatList : Screen("chat_list")
+    object Profile : Screen("profile")
     object ChatDetail : Screen("chat/{chatId}/{peerName}") {
         fun createRoute(chatId: String, peerName: String): String {
             val encodedName = Uri.encode(peerName)
@@ -86,8 +88,14 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                     }
                 },
                 onProfileClick = {
-                    Log.d(NAV_TAG, "Profile click (not implemented)")
+                    navController.navigate(Screen.Profile.route)
                 }
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
 

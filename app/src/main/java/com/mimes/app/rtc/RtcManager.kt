@@ -61,6 +61,14 @@ object RtcManager {
         return audioManager?.isSpeakerphoneOn ?: false
     }
 
+    private var _isMicMuted = false
+    fun isMicMuted(): Boolean = _isMicMuted
+    fun toggleMic(): Boolean {
+        _isMicMuted = !_isMicMuted
+        audioTrack?.setEnabled(!_isMicMuted)
+        return _isMicMuted
+    }
+
     fun setLocalSink(renderer: SurfaceViewRenderer) {
         localRenderSink?.let { videoTrack?.removeSink(it) }
         localRenderSink = renderer

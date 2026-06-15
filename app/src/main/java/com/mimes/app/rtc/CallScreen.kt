@@ -41,6 +41,7 @@ fun CallScreen(
     val isVideoCall by viewModel.isVideo.collectAsState()
     val isCameraOn by viewModel.isCameraOn.collectAsState()
     var isSpeakerOn by remember { mutableStateOf(false) }
+    var isMicMuted by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     var hasMicPermission by remember {
@@ -90,7 +91,9 @@ fun CallScreen(
                     peerName = displayPeerName,
                     isCameraOn = isCameraOn,
                     isSpeakerOn = isSpeakerOn,
+                    isMicMuted = isMicMuted,
                     onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
+                    onToggleMic = { isMicMuted = RtcManager.toggleMic() },
                     onToggleCamera = { viewModel.toggleCamera() },
                     onSwitchCamera = { viewModel.switchCamera() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
@@ -102,7 +105,9 @@ fun CallScreen(
                     peerName = displayPeerName,
                     isCameraOn = isCameraOn,
                     isSpeakerOn = isSpeakerOn,
+                    isMicMuted = isMicMuted,
                     onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
+                    onToggleMic = { isMicMuted = RtcManager.toggleMic() },
                     onToggleCamera = { viewModel.toggleCamera() },
                     onSwitchCamera = { viewModel.switchCamera() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
@@ -127,7 +132,9 @@ fun CallScreen(
                 AudioCallContent(
                     displayPeerName = displayPeerName,
                     isSpeakerOn = isSpeakerOn,
+                    isMicMuted = isMicMuted,
                     onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
+                    onToggleMic = { isMicMuted = RtcManager.toggleMic() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
                 )
             }
@@ -154,7 +161,9 @@ private fun VideoCallContent(
     peerName: String,
     isCameraOn: Boolean,
     isSpeakerOn: Boolean,
+    isMicMuted: Boolean,
     onToggleSpeaker: () -> Unit,
+    onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
     onSwitchCamera: () -> Unit,
     onEndCall: () -> Unit
@@ -227,6 +236,12 @@ private fun VideoCallContent(
                 label = if (isSpeakerOn) "Громкая" else "Динамик",
                 color = if (isSpeakerOn) Color(0xFF6C63FF) else Color(0xFF555555),
                 onClick = onToggleSpeaker
+            )
+            CallButton(
+                icon = if (isMicMuted) "🔇" else "🎤",
+                label = if (isMicMuted) "Микрофон выкл" else "Микрофон вкл",
+                color = if (isMicMuted) Color(0xFFE53935) else Color(0xFF6C63FF),
+                onClick = onToggleMic
             )
             CallButton(
                 icon = "✕",
@@ -320,7 +335,9 @@ private fun IncomingCallContent(
 private fun AudioCallContent(
     displayPeerName: String,
     isSpeakerOn: Boolean,
+    isMicMuted: Boolean,
     onToggleSpeaker: () -> Unit,
+    onToggleMic: () -> Unit,
     onEndCall: () -> Unit
 ) {
     Column(
@@ -381,6 +398,12 @@ private fun AudioCallContent(
                 label = if (isSpeakerOn) "Громкая" else "Динамик",
                 color = if (isSpeakerOn) Color(0xFF6C63FF) else Color(0xFF555555),
                 onClick = onToggleSpeaker
+            )
+            CallButton(
+                icon = if (isMicMuted) "🔇" else "🎤",
+                label = if (isMicMuted) "Микрофон выкл" else "Микрофон вкл",
+                color = if (isMicMuted) Color(0xFFE53935) else Color(0xFF6C63FF),
+                onClick = onToggleMic
             )
             CallButton(
                 icon = "✕",

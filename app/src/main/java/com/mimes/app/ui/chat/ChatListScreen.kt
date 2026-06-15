@@ -46,6 +46,25 @@ fun ChatListScreen(
         viewModel.searchUsers(searchText.trim())
     }
 
+    val incomingRequests by viewModel.incomingRequests.collectAsState()
+    incomingRequests.forEach { request ->
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Запрос в друзья") },
+            text = { Text("Пользователь ${request.from} хочет добавить вас в контакты") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.acceptRequest(request) }) {
+                    Text("Принять")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.rejectRequest(request) }) {
+                    Text("Отклонить")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

@@ -8,6 +8,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.mimes.app.ui.auth.Session
 import com.mimes.app.data.Message
+import com.mimes.app.data.FriendRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
 
     private val db = FirebaseFirestore.getInstance()
     private var contactsListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var requestsListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
     val chats: StateFlow<List<Chat>> = _chats
@@ -31,8 +33,12 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching
 
+    private val _incomingRequests = MutableStateFlow<List<FriendRequest>>(emptyList())
+    val incomingRequests: StateFlow<List<FriendRequest>> = _incomingRequests
+
     init {
         loadChats()
+        listenForRequests()
     }
 
     fun loadChats() {
@@ -128,6 +134,8 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
         super.onCleared()
         contactsListener?.remove()
         contactsListener = null
+        requestsListener?.remove()
+        requestsListener = null
     }
 
     fun clearMissedCalls(peerName: String) {
@@ -152,9 +160,50 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
     fun addContact(contactUserId: String) {
         val userId = Session.currentUserId
         if (userId.isBlank()) return
-
-        db.collection("users").document(userId)
-            .update("contacts", FieldValue.arrayUnion(contactUserId))
+        val requestId = listOf(userId, contactUserId).sorted().joinToString("_") + "_request"
+        val request = hashMapOf(
+            "from" to userId,
+            "to" to contactUserId,
+            "status" to "pending",
+            "createdAt" to FieldValue.serverTimestamp()
+        )
+        db.collection("friend_requests").document(requestId).set(request)
         _searchResults.value = _searchResults.value.filter { it != contactUserId }
+    }
+
+    private fun listenForRequests() {
+        val userId = Session.currentUserId
+        if (userId.isBlank()) return
+        requestsListener?.remove()
+        requestsListener = db.collection("friend_requests")
+            .whereEqualTo("to", userId)
+            .whereEqualTo("status", "pending")
+            .addSnapshotListener { snap, _ ->
+                val list = snap?.documents?.mapNotNull { doc ->
+                    FriendRequest(
+                        id = doc.id,
+                        from = doc.getString("from") ?: return@mapNotNull null,
+                        to = doc.getString("to") ?: return@mapNotNull null,
+                        status = doc.getString("status") ?: "pending"
+                    )
+                } ?: emptyList()
+                _incomingRequests.value = list
+            }
+    }
+
+    fun acceptRequest(request: FriendRequest) {
+        val userId = Session.currentUserId
+        if (userId.isBlank()) return
+        db.runBatch { batch ->
+            batch.update(db.collection("users").document(userId), "contacts", FieldValue.arrayUnion(request.from))
+            batch.update(db.collection("users").document(request.from), "contacts", FieldValue.arrayUnion(userId))
+            batch.delete(db.collection("friend_requests").document(request.id))
+        }
+        _incomingRequests.value = _incomingRequests.value.filter { it.id != request.id }
+    }
+
+    fun rejectRequest(request: FriendRequest) {
+        db.collection("friend_requests").document(request.id).delete()
+        _incomingRequests.value = _incomingRequests.value.filter { it.id != request.id }
     }
 }

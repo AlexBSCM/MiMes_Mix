@@ -48,6 +48,11 @@ class ChatViewModel @Inject constructor() : ViewModel() {
             _uploadProgress.value = UploadState.Uploading
             try {
                 val fileName = getFileName(uri, contentResolver) ?: "file"
+                val fileSize = getFileSize(uri, contentResolver)
+                val maxSize = 20L * 1024 * 1024
+                if (fileSize > maxSize) {
+                    throw Exception("Файл слишком большой (макс. 20 МБ)")
+                }
                 val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
                 val fileType = when {
                     mimeType.startsWith("image/") -> "image"
@@ -84,6 +89,14 @@ class ChatViewModel @Inject constructor() : ViewModel() {
                 _uploadProgress.value = UploadState.Error("Ошибка: ${e.localizedMessage ?: e.message}$code:${e.javaClass.simpleName}")
             }
         }
+    }
+
+    private fun getFileSize(uri: Uri, contentResolver: ContentResolver): Long {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        return cursor?.use {
+            val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
+            if (it.moveToFirst() && sizeIndex >= 0) it.getLong(sizeIndex) else -1
+        } ?: -1
     }
 
     private fun getFileName(uri: Uri, contentResolver: ContentResolver): String? {
