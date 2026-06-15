@@ -88,11 +88,14 @@ object RtcManager {
                 .whereEqualTo("status", "ringing")
                 .get(com.google.firebase.firestore.Source.SERVER)
                 .await()
-            stale.documents.forEach { doc ->
-                if (doc.getString("receiverId") == myId || doc.getString("callerId") == myId) {
-                    doc.reference.delete()
+            // Await all deletes before starting the listener
+            stale.documents
+                .filter { doc ->
+                    val r = doc.getString("receiverId")
+                    val c = doc.getString("callerId")
+                    r == myId || c == myId
                 }
-            }
+                .map { it.reference.delete().await() }
         } catch (e: Exception) {
             Log.e(TAG, "Stale call cleanup failed", e)
         }
