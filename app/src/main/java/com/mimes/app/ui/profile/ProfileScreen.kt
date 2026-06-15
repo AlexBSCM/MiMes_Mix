@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +32,7 @@ private val VISIBILITY_OPTIONS = listOf("public" to "Всем", "contacts" to "�
 @Composable
 fun ProfileScreen(
     onBackClick: () -> Unit,
+    onSignOut: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val profile by viewModel.profile.collectAsState()
@@ -162,6 +164,16 @@ fun ProfileScreen(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(16.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedButton(
+                onClick = onSignOut,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE53935))
+            ) {
+                Text("Выйти из аккаунта")
             }
 
             Spacer(modifier = Modifier.height(32.dp))

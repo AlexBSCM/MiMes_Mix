@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import com.mimes.app.rtc.CallScreen
 import com.mimes.app.rtc.RtcManager
 import com.mimes.app.ui.auth.AuthScreen
+import com.mimes.app.ui.auth.Session
 import com.mimes.app.ui.chat.ChatListScreen
 import com.mimes.app.ui.chatdetail.ChatScreen
 import com.mimes.app.ui.profile.ProfileScreen
@@ -94,8 +95,16 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
         }
 
         composable(Screen.Profile.route) {
+            val context = androidx.compose.ui.platform.LocalContext.current
             ProfileScreen(
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onSignOut = {
+                    Session.currentUserId = ""
+                    context.getSharedPreferences("auth", android.content.Context.MODE_PRIVATE).edit().clear().apply()
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
 
