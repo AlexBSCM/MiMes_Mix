@@ -51,10 +51,6 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
             }
         }
     }
-    // Also ensure listener is active on first composition (will be restarted by ChatListScreen after login)
-    LaunchedEffect(Unit) {
-        RtcManager.listenForIncomingCalls()
-    }
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable(Screen.Auth.route) {

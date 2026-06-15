@@ -73,19 +73,35 @@ object RtcManager {
         audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
     }
 
+    private val handledCallIds = mutableSetOf<String>()
+
     fun listenForIncomingCalls() {
         incomingCallListener?.remove()
+        val myId = Session.currentUserId
+        if (myId.isBlank()) return
+
+        // Clean up any stale "ringing" calls for this user from previous sessions
+        db.collection("calls")
+            .whereEqualTo("receiverId", myId)
+            .whereEqualTo("status", "ringing")
+            .get()
+            .addOnSuccessListener { snap ->
+                snap.documents.forEach { doc ->
+                    doc.reference.delete()
+                }
+            }
+
         incomingCallListener = db.collection("calls")
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snap, _ ->
-                val myId = Session.currentUserId
                 if (myId.isBlank()) return@addSnapshotListener
                 snap?.documents?.forEach { doc ->
                     val receiverId = doc.getString("receiverId") ?: return@forEach
                     if (receiverId != myId) return@forEach
                     val callerId = doc.getString("callerId") ?: return@forEach
                     val callId = doc.id
-                    if (callerId != myId) {
+                    if (callerId != myId && callId !in handledCallIds) {
+                        handledCallIds.add(callId)
                         _incomingCallFlow.tryEmit(Pair(callerId, callId))
                     }
                 }
@@ -244,12 +260,13 @@ object RtcManager {
     }
 
     fun rejectCall(callId: String) {
-        db.collection("calls").document(callId).update("status", "ended")
+        db.collection("calls").document(callId).delete()
         endCall(callId)
     }
 
     fun endCall(callId: String, onStateChange: ((CallState) -> Unit)? = null) {
-        db.collection("calls").document(callId).update("status", "ended")
+        db.collection("calls").document(callId).delete()
+        handledCallIds.clear()
         peerConnection?.close()
         peerConnection = null
         answerListener?.remove()
