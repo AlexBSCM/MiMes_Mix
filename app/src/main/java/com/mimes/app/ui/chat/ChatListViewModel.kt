@@ -1,5 +1,6 @@
 ﻿package com.mimes.app.ui.chat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
@@ -173,12 +174,17 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
 
     private fun listenForRequests() {
         val userId = Session.currentUserId
+        Log.d("ChatListVM", "listenForRequests: userId=$userId")
         if (userId.isBlank()) return
         requestsListener?.remove()
         requestsListener = db.collection("friend_requests")
             .whereEqualTo("to", userId)
             .whereEqualTo("status", "pending")
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    Log.e("ChatListVM", "listenForRequests error", error)
+                    return@addSnapshotListener
+                }
                 val list = snap?.documents?.mapNotNull { doc ->
                     FriendRequest(
                         id = doc.id,
@@ -187,8 +193,14 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
                         status = doc.getString("status") ?: "pending"
                     )
                 } ?: emptyList()
+                Log.d("ChatListVM", "Incoming requests: $list")
                 _incomingRequests.value = list
             }
+    }
+
+    fun refreshListeners() {
+        loadChats()
+        listenForRequests()
     }
 
     fun acceptRequest(request: FriendRequest) {

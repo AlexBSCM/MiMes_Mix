@@ -41,6 +41,7 @@ fun ChatListScreen(
 
     LaunchedEffect(Unit) {
         RtcManager.listenForIncomingCalls()
+        viewModel.refreshListeners()
     }
 
     LaunchedEffect(searchText) {
