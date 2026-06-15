@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mimes.app.ui.auth.Session
+import kotlinx.coroutines.tasks.await
 import org.webrtc.*
 import java.util.UUID
 
@@ -75,27 +76,27 @@ object RtcManager {
 
     private val handledCallIds = mutableSetOf<String>()
 
-    fun listenForIncomingCalls() {
+    suspend fun listenForIncomingCalls() {
         incomingCallListener?.remove()
         val myId = Session.currentUserId
         if (myId.isBlank()) return
 
-        // First clean up stale "ringing" calls, then set up the listener
-        db.collection("calls")
-            .whereEqualTo("receiverId", myId)
-            .whereEqualTo("status", "ringing")
-            .get()
-            .addOnSuccessListener { snap ->
-                snap.documents.forEach { doc ->
+        try {
+            // Delete ALL stale "ringing" calls before setting up the listener
+            val stale = db.collection("calls")
+                .whereEqualTo("status", "ringing")
+                .get()
+                .await()
+            stale.documents.forEach { doc ->
+                if (doc.getString("receiverId") == myId || doc.getString("callerId") == myId) {
                     doc.reference.delete()
                 }
-                // Only set up listener AFTER cleanup to avoid stale events
-                setupIncomingCallListener(myId)
             }
-            .addOnFailureListener {
-                // If cleanup fails, still set up the listener
-                setupIncomingCallListener(myId)
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Stale call cleanup failed", e)
+        }
+
+        setupIncomingCallListener(myId)
     }
 
     private fun setupIncomingCallListener(myId: String) {
