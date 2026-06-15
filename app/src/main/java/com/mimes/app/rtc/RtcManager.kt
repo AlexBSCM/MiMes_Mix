@@ -79,27 +79,31 @@ object RtcManager {
     suspend fun listenForIncomingCalls() {
         incomingCallListener?.remove()
         val myId = Session.currentUserId
+        Log.d(TAG, "listenForIncomingCalls: userId=$myId")
         if (myId.isBlank()) return
 
         try {
             // Delete ALL stale "ringing" calls before setting up the listener
-            // Use Source.SERVER to bypass local cache (stale docs live on server)
             val stale = db.collection("calls")
                 .whereEqualTo("status", "ringing")
                 .get(com.google.firebase.firestore.Source.SERVER)
                 .await()
-            // Await all deletes before starting the listener
-            stale.documents
-                .filter { doc ->
-                    val r = doc.getString("receiverId")
-                    val c = doc.getString("callerId")
-                    r == myId || c == myId
+            Log.d(TAG, "Stale ringing docs found: ${stale.documents.size}")
+            stale.documents.forEach { doc ->
+                val r = doc.getString("receiverId")
+                val c = doc.getString("callerId")
+                val id = doc.id
+                Log.d(TAG, "  doc: id=$id caller=$c receiver=$r")
+                if (r == myId || c == myId) {
+                    doc.reference.delete().await()
+                    Log.d(TAG, "  -> deleted")
                 }
-                .map { it.reference.delete().await() }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Stale call cleanup failed", e)
         }
 
+        Log.d(TAG, "Setting up incoming call listener")
         setupIncomingCallListener(myId)
     }
 
