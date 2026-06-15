@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mimes.app.rtc.RtcManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +48,9 @@ fun ChatListScreen(
     }
 
     val incomingRequests by viewModel.incomingRequests.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     incomingRequests.forEach { request ->
         AlertDialog(
             onDismissRequest = { },
@@ -66,6 +70,7 @@ fun ChatListScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("MiMes") },
@@ -118,7 +123,12 @@ fun ChatListScreen(
                 items(searchResults) { userId ->
                     SearchResultRow(
                         userId = userId,
-                        onAdd = { viewModel.addContact(userId) }
+                        onAdd = {
+                            viewModel.addContact(userId)
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Запрос отправлен пользователю $userId")
+                            }
+                        }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                 }
@@ -165,7 +175,7 @@ private fun SearchResultRow(userId: String, onAdd: () -> Unit) {
         FilledTonalButton(onClick = onAdd) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Добавить")
+            Text("Пригласить")
         }
     }
 }
