@@ -8,6 +8,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Friend requests — both parties need access
+    match /friend_requests/{requestId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Calls — both participants need full access
     match /calls/{callId} {
       allow read, write: if request.auth != null;

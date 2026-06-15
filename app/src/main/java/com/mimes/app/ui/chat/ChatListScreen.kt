@@ -58,7 +58,12 @@ fun ChatListScreen(
             title = { Text("Запрос в друзья") },
             text = { Text("Пользователь ${request.from} хочет добавить вас в контакты") },
             confirmButton = {
-                TextButton(onClick = { viewModel.acceptRequest(request) }) {
+                TextButton(onClick = {
+                    viewModel.acceptRequest(request)
+                    viewModel.toggleSearch()
+                    val chatId = listOf(com.mimes.app.ui.auth.Session.currentUserId, request.from).sorted().joinToString("_")
+                    onChatClick(chatId, request.from)
+                }) {
                     Text("Принять")
                 }
             },
@@ -126,6 +131,7 @@ fun ChatListScreen(
                         userId = userId,
                         onAdd = {
                             viewModel.addContact(userId)
+                            viewModel.toggleSearch()
                             scope.launch {
                                 snackbarHostState.showSnackbar("Запрос отправлен пользователю $userId")
                             }
