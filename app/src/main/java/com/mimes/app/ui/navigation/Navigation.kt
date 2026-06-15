@@ -51,6 +51,15 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
             }
         }
     }
+
+    LaunchedEffect(Unit) {
+        RtcManager.callCancelledFlow.collect { _ ->
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute == "incoming_call/{callerId}/{callId}/{isVideo}") {
+                navController.popBackStack()
+            }
+        }
+    }
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable(Screen.Auth.route) {

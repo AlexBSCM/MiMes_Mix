@@ -1,6 +1,7 @@
 package com.mimes.app.rtc
 
 import android.content.Context
+import android.media.AudioManager
 import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -38,8 +39,47 @@ object RtcManager {
     private var eglBase: EglBase? = null
 
     var isVideoCall = false
-    var localRenderer: SurfaceViewRenderer? = null
-    var remoteRenderer: SurfaceViewRenderer? = null
+    private var remoteVideoTrack: VideoTrack? = null
+    private var localRenderSink: SurfaceViewRenderer? = null
+    private var remoteRenderSink: SurfaceViewRenderer? = null
+    private var audioManager: AudioManager? = null
+
+    private fun setAudioRoute(context: Context, speakerOn: Boolean) {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager?.isSpeakerphoneOn = speakerOn
+    }
+
+    private fun resetAudioRoute() {
+        audioManager?.isSpeakerphoneOn = false
+        audioManager?.mode = AudioManager.MODE_NORMAL
+        audioManager = null
+    }
+
+    fun toggleSpeaker(): Boolean {
+        audioManager?.let { it.isSpeakerphoneOn = !it.isSpeakerphoneOn }
+        return audioManager?.isSpeakerphoneOn ?: false
+    }
+
+    fun setLocalSink(renderer: SurfaceViewRenderer) {
+        localRenderSink?.let { videoTrack?.removeSink(it) }
+        localRenderSink = renderer
+        videoTrack?.addSink(renderer)
+    }
+
+    fun setRemoteSink(renderer: SurfaceViewRenderer) {
+        remoteRenderSink?.let { remoteVideoTrack?.removeSink(it) }
+        remoteRenderSink = renderer
+        remoteVideoTrack?.addSink(renderer)
+    }
+
+    fun createRenderer(context: Context, mirror: Boolean): SurfaceViewRenderer {
+        val renderer = SurfaceViewRenderer(context)
+        renderer.init(eglBase?.eglBaseContext, null)
+        renderer.setMirror(mirror)
+        renderer.setEnableHardwareScaler(true)
+        return renderer
+    }
 
     private var incomingCallListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var answerListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -50,6 +90,9 @@ object RtcManager {
 
     private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Triple<String, String, Boolean>>(replay = 1)
     val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Triple<String, String, Boolean>> = _incomingCallFlow
+
+    private val _callCancelledFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(replay = 1)
+    val callCancelledFlow: kotlinx.coroutines.flow.SharedFlow<String> = _callCancelledFlow
 
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -99,10 +142,12 @@ object RtcManager {
         return null
     }
 
-    fun startVideo(context: Context) {
-        if (videoSource != null) return
-        videoSource = peerConnectionFactory?.createVideoSource(false)
-        videoCapturer = createVideoCapturer(context) ?: return
+    fun startVideo(context: Context): Boolean {
+        if (videoSource != null) return true
+        if (eglBase == null) return false
+        if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        videoSource = peerConnectionFactory?.createVideoSource(false) ?: return false
+        videoCapturer = createVideoCapturer(context) ?: return false
         videoCapturer?.initialize(
             SurfaceTextureHelper.create("CaptureThread", eglBase?.eglBaseContext),
             context,
@@ -110,6 +155,7 @@ object RtcManager {
         )
         videoCapturer?.startCapture(1280, 720, 30)
         videoTrack = peerConnectionFactory?.createVideoTrack("video_track", videoSource)
+        return videoTrack != null
     }
 
     fun stopVideo() {
@@ -122,6 +168,9 @@ object RtcManager {
         videoTrack = null
         videoSource?.dispose()
         videoSource = null
+        remoteVideoTrack = null
+        localRenderSink = null
+        remoteRenderSink = null
     }
 
     fun switchCamera() {
@@ -129,6 +178,8 @@ object RtcManager {
     }
 
     private val handledCallIds = mutableSetOf<String>()
+    private val activeIncomingCalls = mutableSetOf<String>()
+    private val acceptedCallIds = mutableSetOf<String>()
 
     suspend fun listenForIncomingCalls() {
         incomingCallListener?.remove()
@@ -166,17 +217,31 @@ object RtcManager {
             .whereEqualTo("status", "ringing")
             .addSnapshotListener { snap, _ ->
                 if (myId.isBlank()) return@addSnapshotListener
+
+                val currentMatchingIds = mutableSetOf<String>()
+
                 snap?.documents?.forEach { doc ->
                     val receiverId = doc.getString("receiverId") ?: return@forEach
                     if (receiverId != myId) return@forEach
-                    val callerId = doc.getString("callerId") ?: return@forEach
                     val callId = doc.id
+                    currentMatchingIds.add(callId)
+
+                    val callerId = doc.getString("callerId") ?: return@forEach
                     val isVideo = doc.getString("type") == "video"
                     if (callerId != myId && callId !in handledCallIds) {
                         handledCallIds.add(callId)
                         _incomingCallFlow.tryEmit(Triple(callerId, callId, isVideo))
                     }
                 }
+
+                // Detect cancellations: call was active but no longer in snapshot (and not accepted)
+                activeIncomingCalls.removeAll { id ->
+                    if (id !in currentMatchingIds && id !in acceptedCallIds) {
+                        _callCancelledFlow.tryEmit(id)
+                        true
+                    } else false
+                }
+                activeIncomingCalls.addAll(currentMatchingIds)
             }
     }
 
@@ -193,6 +258,7 @@ object RtcManager {
         currentPeerId = receiverId
         this.isVideoCall = isVideo
         onStateChange(CallState.Outgoing(callId, receiverId))
+        if (context != null) setAudioRoute(context, isVideo)
 
         val callData = hashMapOf(
             "callerId" to Session.currentUserId,
@@ -235,7 +301,7 @@ object RtcManager {
                 val remoteTrack = track.track() as? VideoTrack
                 if (remoteTrack != null) {
                     Log.d(TAG, "Remote video track received")
-                    remoteTrack.addSink(remoteRenderer)
+                    remoteVideoTrack = remoteTrack
                 }
             }
         }
@@ -243,8 +309,7 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = createPeerConnection(observer)?.apply {
             audioTrack?.let { addTrack(it) }
-            if (isVideoCall && context != null) {
-                startVideo(context)
+            if (isVideoCall && context != null && startVideo(context)) {
                 videoTrack?.let { addTrack(it) }
             }
             createOffer(object : SdpObserver {
@@ -272,6 +337,8 @@ object RtcManager {
         currentCallId = callId
         currentPeerId = callerId
         this.isVideoCall = isVideo
+        acceptedCallIds.add(callId)
+        if (context != null) setAudioRoute(context, isVideo)
         db.collection("calls").document(callId).update("status", "accepted")
 
         val observer = object : PeerConnection.Observer {
@@ -306,7 +373,7 @@ object RtcManager {
                 val remoteTrack = track.track() as? VideoTrack
                 if (remoteTrack != null) {
                     Log.d(TAG, "Remote video track received")
-                    remoteTrack.addSink(remoteRenderer)
+                    remoteVideoTrack = remoteTrack
                 }
             }
         }
@@ -315,8 +382,9 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = pc
         audioTrack?.let { pc?.addTrack(it) }
-        if (isVideoCall && context != null) {
-            startVideo(context)
+        val videoStarted = isVideoCall && context != null && startVideo(context)
+        if (videoStarted) {
+            videoTrack?.let { pc?.addTrack(it) }
         }
 
         db.collection("calls").document(callId).collection("offer").document("offer").get()
@@ -358,6 +426,22 @@ object RtcManager {
     }
 
     fun endCall(callId: String, onStateChange: ((CallState) -> Unit)? = null) {
+        // Track missed calls before deleting
+        db.collection("calls").document(callId).get().addOnSuccessListener { doc ->
+            val status = doc.getString("status")
+            val receiverId = doc.getString("receiverId")
+            val callerId = doc.getString("callerId")
+            if (status == "ringing" && callerId != null) {
+                if (callerId == Session.currentUserId && receiverId != null && receiverId != Session.currentUserId) {
+                    // Caller cancelled → receiver missed the call
+                    db.collection("users").document(receiverId)
+                        .update("missedCalls.$callerId", com.google.firebase.firestore.FieldValue.increment(1))
+                } else if (receiverId == Session.currentUserId && callerId != Session.currentUserId) {
+                    // Receiver rejected intentionally → don't count as missed
+                }
+            }
+        }
+        resetAudioRoute()
         db.collection("calls").document(callId).delete()
         handledCallIds.add(callId)
         stopVideo()
@@ -371,6 +455,8 @@ object RtcManager {
         currentPeerId = null
         pendingCandidates.clear()
         isVideoCall = false
+        activeIncomingCalls.clear()
+        acceptedCallIds.remove(callId)
         onStateChange?.invoke(CallState.Ended())
     }
 
@@ -423,10 +509,6 @@ object RtcManager {
     fun release() {
         currentCallId?.let { endCall(it) }
         stopVideo()
-        localRenderer?.release()
-        localRenderer = null
-        remoteRenderer?.release()
-        remoteRenderer = null
         audioTrack?.dispose()
         audioTrack = null
         audioSource?.dispose()
@@ -438,5 +520,7 @@ object RtcManager {
         incomingCallListener?.remove()
         incomingCallListener = null
         initialized = false
+        activeIncomingCalls.clear()
+        acceptedCallIds.clear()
     }
 }

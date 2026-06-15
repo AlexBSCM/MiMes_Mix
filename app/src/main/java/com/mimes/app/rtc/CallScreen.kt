@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import org.webrtc.SurfaceViewRenderer
 
 @Composable
 fun CallScreen(
@@ -40,6 +40,7 @@ fun CallScreen(
     val displayPeerName by viewModel.peerName.collectAsState()
     val isVideoCall by viewModel.isVideo.collectAsState()
     val isCameraOn by viewModel.isCameraOn.collectAsState()
+    var isSpeakerOn by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     var hasMicPermission by remember {
@@ -55,14 +56,6 @@ fun CallScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (!hasMicPermission || (isVideoCall && !hasCamPermission)) {
-            val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
-            if (isVideoCall && !hasCamPermission) perms.add(Manifest.permission.CAMERA)
-            permLauncher.launch(perms.toTypedArray())
-        }
-    }
-
-    LaunchedEffect(Unit) {
         if (isIncoming && incomingCallId.isNotBlank()) {
             viewModel.incomingCall(if (peerName.startsWith("@")) peerName else "@$peerName", incomingCallId, isVideo)
         } else if (peerName.isNotBlank()) {
@@ -70,31 +63,17 @@ fun CallScreen(
         }
     }
 
+    LaunchedEffect(isVideoCall, isIncoming) {
+        if (!hasMicPermission || (isVideoCall && !hasCamPermission)) {
+            val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
+            if (isVideoCall && !hasCamPermission) perms.add(Manifest.permission.CAMERA)
+            permLauncher.launch(perms.toTypedArray())
+        }
+    }
+
     LaunchedEffect(callState) {
         if (callState is CallState.Ended) {
             onEndCall()
-        }
-    }
-
-    // Setup video renderers when video call starts
-    if (isVideoCall && (callState is CallState.Connected || callState is CallState.Outgoing)) {
-        LaunchedEffect(Unit) {
-            if (RtcManager.localRenderer == null) {
-                RtcManager.localRenderer = SurfaceViewRenderer(context)
-                RtcManager.localRenderer?.setMirror(true)
-                RtcManager.localRenderer?.setEnableHardwareScaler(true)
-                RtcManager.videoTrack?.addSink(RtcManager.localRenderer)
-            }
-        }
-    }
-
-    if (isVideoCall && callState is CallState.Connected) {
-        LaunchedEffect(Unit) {
-            if (RtcManager.remoteRenderer == null) {
-                RtcManager.remoteRenderer = SurfaceViewRenderer(context)
-                RtcManager.remoteRenderer?.setMirror(false)
-                RtcManager.remoteRenderer?.setEnableHardwareScaler(true)
-            }
         }
     }
 
@@ -110,6 +89,8 @@ fun CallScreen(
                 VideoCallContent(
                     peerName = displayPeerName,
                     isCameraOn = isCameraOn,
+                    isSpeakerOn = isSpeakerOn,
+                    onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
                     onToggleCamera = { viewModel.toggleCamera() },
                     onSwitchCamera = { viewModel.switchCamera() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
@@ -120,6 +101,8 @@ fun CallScreen(
                 VideoCallContent(
                     peerName = displayPeerName,
                     isCameraOn = isCameraOn,
+                    isSpeakerOn = isSpeakerOn,
+                    onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
                     onToggleCamera = { viewModel.toggleCamera() },
                     onSwitchCamera = { viewModel.switchCamera() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
@@ -143,16 +126,24 @@ fun CallScreen(
             callState is CallState.Connected -> {
                 AudioCallContent(
                     displayPeerName = displayPeerName,
+                    isSpeakerOn = isSpeakerOn,
+                    onToggleSpeaker = { isSpeakerOn = RtcManager.toggleSpeaker() },
                     onEndCall = { viewModel.endCall(); onEndCall() }
                 )
             }
             // Audio call outgoing
             callState is CallState.Outgoing -> {
-                OutgoingCallContent(displayPeerName = displayPeerName)
+                OutgoingCallContent(
+                    displayPeerName = displayPeerName,
+                    onEndCall = { viewModel.endCall(); onEndCall() }
+                )
             }
             // Default
             else -> {
-                OutgoingCallContent(displayPeerName = displayPeerName)
+                OutgoingCallContent(
+                    displayPeerName = displayPeerName,
+                    onEndCall = { viewModel.endCall(); onEndCall() }
+                )
             }
         }
     }
@@ -162,33 +153,45 @@ fun CallScreen(
 private fun VideoCallContent(
     peerName: String,
     isCameraOn: Boolean,
+    isSpeakerOn: Boolean,
+    onToggleSpeaker: () -> Unit,
     onToggleCamera: () -> Unit,
     onSwitchCamera: () -> Unit,
     onEndCall: () -> Unit
 ) {
+    val context = LocalContext.current
+    val remoteRenderer = remember { RtcManager.createRenderer(context, false) }
+    val localRenderer = remember { RtcManager.createRenderer(context, true) }
+
+    LaunchedEffect(Unit) {
+        RtcManager.setRemoteSink(remoteRenderer)
+        RtcManager.setLocalSink(localRenderer)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            remoteRenderer.release()
+            localRenderer.release()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Remote video (full screen)
-        val remoteRenderer = RtcManager.remoteRenderer
-        if (remoteRenderer != null) {
-            AndroidView(
-                factory = { remoteRenderer.apply { layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) } },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        AndroidView(
+            factory = { remoteRenderer.apply { layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) } },
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Local preview (small, top-right corner)
-        val localRenderer = RtcManager.localRenderer
-        if (localRenderer != null) {
-            AndroidView(
-                factory = { localRenderer },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .width(120.dp)
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
-        }
+        AndroidView(
+            factory = { localRenderer },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .width(120.dp)
+                .height(180.dp)
+                .clip(RoundedCornerShape(12.dp))
+        )
 
         // Peer name overlay
         Column(
@@ -218,6 +221,12 @@ private fun VideoCallContent(
                 label = "Сменить",
                 color = Color(0xFF6C63FF),
                 onClick = onSwitchCamera
+            )
+            CallButton(
+                icon = if (isSpeakerOn) "🔊" else "🔇",
+                label = if (isSpeakerOn) "Громкая" else "Динамик",
+                color = if (isSpeakerOn) Color(0xFF6C63FF) else Color(0xFF555555),
+                onClick = onToggleSpeaker
             )
             CallButton(
                 icon = "✕",
@@ -310,6 +319,8 @@ private fun IncomingCallContent(
 @Composable
 private fun AudioCallContent(
     displayPeerName: String,
+    isSpeakerOn: Boolean,
+    onToggleSpeaker: () -> Unit,
     onEndCall: () -> Unit
 ) {
     Column(
@@ -361,19 +372,30 @@ private fun AudioCallContent(
 
         Spacer(modifier = Modifier.weight(0.4f))
 
-        CallButton(
-            icon = "✕",
-            label = "Завершить",
-            color = Color(0xFFE53935),
-            onClick = onEndCall
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            CallButton(
+                icon = if (isSpeakerOn) "🔊" else "🔇",
+                label = if (isSpeakerOn) "Громкая" else "Динамик",
+                color = if (isSpeakerOn) Color(0xFF6C63FF) else Color(0xFF555555),
+                onClick = onToggleSpeaker
+            )
+            CallButton(
+                icon = "✕",
+                label = "Завершить",
+                color = Color(0xFFE53935),
+                onClick = onEndCall
+            )
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun OutgoingCallContent(displayPeerName: String) {
+private fun OutgoingCallContent(displayPeerName: String, onEndCall: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
@@ -427,7 +449,7 @@ private fun OutgoingCallContent(displayPeerName: String) {
             icon = "✕",
             label = "Отмена",
             color = Color(0xFFE53935),
-            onClick = { /* ViewModel handles endCall from callState Ended */ }
+            onClick = onEndCall
         )
 
         Spacer(modifier = Modifier.height(32.dp))

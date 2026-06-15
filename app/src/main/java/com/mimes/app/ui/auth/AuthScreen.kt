@@ -1,8 +1,10 @@
 ﻿package com.mimes.app.ui.auth
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +27,10 @@ fun AuthScreen(
 
     val authState by viewModel.authState.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.tryAutoLogin()
+    }
+
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
             onAuthSuccess()
@@ -36,7 +42,9 @@ fun AuthScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
+                .padding(24.dp)
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

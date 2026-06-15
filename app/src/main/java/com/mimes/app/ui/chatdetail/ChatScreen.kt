@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -53,14 +54,19 @@ fun ChatScreen(
     val uploadProgress by viewModel.uploadProgress.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    var pendingFileUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingFileName by remember { mutableStateOf("") }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            val receiverId = if (peerName == "Бот") "bot" else peerName
-            viewModel.uploadAndSendFile(chatId, receiverId, messageText, uri, context.contentResolver)
-            messageText = ""
+            pendingFileUri = uri
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            pendingFileName = cursor?.use {
+                val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (it.moveToFirst() && nameIndex >= 0) it.getString(nameIndex) else "Файл"
+            } ?: "Файл"
         }
     }
 
@@ -75,7 +81,7 @@ fun ChatScreen(
     }
 
     LaunchedEffect(chatId) {
-        Log.d(TAG, "Loading messages for: ")
+        Log.d(TAG, "Loading messages")
         try {
             viewModel.loadMessages(chatId)
             viewModel.markChatAsRead(chatId)
@@ -84,11 +90,17 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        com.mimes.app.ui.chat.ChatListViewModel.clearMissedCallsStatic(peerName)
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
+
+
 
     LaunchedEffect(uploadProgress) {
         when (uploadProgress) {
@@ -133,78 +145,92 @@ fun ChatScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        },
-        bottomBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).imePadding()) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                state = listState,
+                reverseLayout = false
             ) {
-                OutlinedTextField(
-                    value = messageText,
-                    onValueChange = { messageText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Сообщение...") },
-                    shape = RoundedCornerShape(24.dp),
-                    maxLines = 4
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable {
+                items(messages, key = { it.id }) { message ->
+                    val isMe = message.senderId == currentUid
+                    MessageBubble(message = message, isMe = isMe)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+                
+                // Если сообщений нет
+                if (messages.isEmpty()) {
+                    item {
+                        Box(modifier = Modifier.fillParentMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+                            Text("Нет сообщений. Напишите первым!", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
+            Column(modifier = Modifier.navigationBarsPadding()) {
+                if (pendingFileUri != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) { Text("\uD83D\uDCCE", fontSize = 16.sp) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(pendingFileName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { pendingFileUri = null; pendingFileName = "" }) {
+                            Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = messageText,
+                        onValueChange = { messageText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Сообщение...") },
+                        shape = RoundedCornerShape(24.dp),
+                        maxLines = 4
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier.size(48.dp).clickable {
                             if (uploadProgress !is UploadState.Uploading) {
                                 filePickerLauncher.launch("*/*")
                             }
                         },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "\uD83D\uDCCE",
-                        fontSize = 28.sp
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                FloatingActionButton(
-                    onClick = {
-                        if (messageText.isNotBlank()) {
-                            Log.d(TAG, "Sending message:  to ")
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("\uD83D\uDCCE", fontSize = 28.sp)
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    FloatingActionButton(
+                        onClick = {
                             val receiverId = if (peerName == "Бот") "bot" else peerName
                             try {
-                                viewModel.sendMessage(chatId, receiverId, messageText)
+                                if (pendingFileUri != null) {
+                                    viewModel.uploadAndSendFile(chatId, receiverId, messageText, pendingFileUri!!, context.contentResolver)
+                                    pendingFileUri = null
+                                    pendingFileName = ""
+                                } else if (messageText.isNotBlank()) {
+                                    viewModel.sendMessage(chatId, receiverId, messageText)
+                                }
+                                messageText = ""
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error sending message", e)
                             }
-                            messageText = ""
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Send, contentDescription = "Отправить", tint = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp),
-            state = listState,
-            reverseLayout = false
-        ) {
-            items(messages, key = { it.id }) { message ->
-                val isMe = message.senderId == currentUid
-                MessageBubble(message = message, isMe = isMe)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-            
-            // Если сообщений нет
-            if (messages.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillParentMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
-                        Text("Нет сообщений. Напишите первым!", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Icon(Icons.Filled.Send, contentDescription = "Отправить", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }

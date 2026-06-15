@@ -44,18 +44,15 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
             .addSnapshotListener { snapshot, _ ->
                 val contacts = snapshot?.get("contacts") as? List<String> ?: emptyList()
                 val lastReadMap = snapshot?.get("lastReadTimestamps") as? Map<String, Any> ?: emptyMap()
+                val missedCallsMap = snapshot?.get("missedCalls") as? Map<String, Any> ?: emptyMap()
                 val chats = contacts.map { contact ->
                     val chatId = listOf(userId, contact).sorted().joinToString("_")
                     val lastRead = lastReadMap[chatId]
-                    Chat(id = chatId, name = contact, lastMessage = "", timestamp = "", unreadCount = 0)
+                    val missed = (missedCallsMap[contact] as? Number)?.toInt() ?: 0
+                    Chat(id = chatId, name = contact, lastMessage = "", timestamp = "", unreadCount = 0, missedCalls = missed)
                 }
-                val base = listOf(
-                    Chat(id = "bot_chat_001", name = "Бот", lastMessage = "Напишите мне!", timestamp = "", unreadCount = 0),
-                    Chat(id = "general_chat", name = "Общий чат", lastMessage = "Добро пожаловать в MiMes", timestamp = "", unreadCount = 0)
-                )
-                _chats.value = base + chats
-                base.forEach { fetchChatInfo(it, null) }
-                chats.forEachIndexed { i, chat ->
+                _chats.value = chats
+                chats.forEach { chat ->
                     val ls = lastReadMap[chat.id]
                     fetchChatInfo(chat, ls as? com.google.firebase.Timestamp)
                 }
@@ -131,6 +128,25 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
         super.onCleared()
         contactsListener?.remove()
         contactsListener = null
+    }
+
+    fun clearMissedCalls(peerName: String) {
+        val userId = Session.currentUserId
+        if (userId.isBlank()) return
+        db.collection("users").document(userId)
+            .update("missedCalls.$peerName", FieldValue.delete())
+        _chats.value = _chats.value.map {
+            if (it.name == peerName) it.copy(missedCalls = 0) else it
+        }
+    }
+
+    companion object {
+        fun clearMissedCallsStatic(peerName: String) {
+            val userId = Session.currentUserId
+            if (userId.isBlank()) return
+            FirebaseFirestore.getInstance().collection("users").document(userId)
+                .update("missedCalls.$peerName", FieldValue.delete())
+        }
     }
 
     fun addContact(contactUserId: String) {

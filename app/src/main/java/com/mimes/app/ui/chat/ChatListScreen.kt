@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -156,7 +158,7 @@ fun ChatItemRow(chat: Chat, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(52.dp)
         ) {
             Box(
                 modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
@@ -169,11 +171,30 @@ fun ChatItemRow(chat: Chat, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            if (chat.unreadCount > 0) {
+            if (chat.missedCalls > 0) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .size(20.dp)
+                        .offset(x = (-4).dp, y = (-4).dp)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(androidx.compose.ui.graphics.Color(0xFF4CAF50)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = chat.missedCalls.toString(),
+                        color = androidx.compose.ui.graphics.Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            if (chat.unreadCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 2.dp, y = 2.dp)
+                        .size(18.dp)
                         .clip(CircleShape)
                         .background(androidx.compose.ui.graphics.Color(0xFFE53935)),
                     contentAlignment = Alignment.Center
@@ -181,7 +202,7 @@ fun ChatItemRow(chat: Chat, onClick: () -> Unit) {
                     Text(
                         text = if (chat.unreadCount > 99) "99+" else chat.unreadCount.toString(),
                         color = androidx.compose.ui.graphics.Color.White,
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
