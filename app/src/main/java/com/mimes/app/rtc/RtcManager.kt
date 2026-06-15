@@ -32,6 +32,14 @@ object RtcManager {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
+    private var videoSource: VideoSource? = null
+    var videoTrack: VideoTrack? = null
+    private var videoCapturer: VideoCapturer? = null
+    private var eglBase: EglBase? = null
+
+    var isVideoCall = false
+    var localRenderer: SurfaceViewRenderer? = null
+    var remoteRenderer: SurfaceViewRenderer? = null
 
     private var incomingCallListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var answerListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -40,8 +48,8 @@ object RtcManager {
     var currentCallId: String? = null
     var currentPeerId: String? = null
 
-    private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(replay = 1)
-    val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Pair<String, String>> = _incomingCallFlow
+    private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Triple<String, String, Boolean>>(replay = 1)
+    val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Triple<String, String, Boolean>> = _incomingCallFlow
 
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -60,9 +68,11 @@ object RtcManager {
                 .createInitializationOptions()
         )
 
-        val options = PeerConnectionFactory.Options()
+        eglBase = EglBase.create()
+
         peerConnectionFactory = PeerConnectionFactory.builder()
-            .setOptions(options)
+            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase?.eglBaseContext))
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase?.eglBaseContext, true, true))
             .createPeerConnectionFactory()
 
         val audioConstraints = MediaConstraints().apply {
@@ -72,6 +82,51 @@ object RtcManager {
 
         audioSource = peerConnectionFactory?.createAudioSource(audioConstraints)
         audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
+    }
+
+    fun createVideoCapturer(context: Context): VideoCapturer? {
+        val enumerator = Camera2Enumerator(context)
+        val deviceNames = enumerator.deviceNames
+        for (name in deviceNames) {
+            if (enumerator.isFrontFacing(name)) {
+                return enumerator.createCapturer(name, null)
+            }
+        }
+        // fallback to first available
+        for (name in deviceNames) {
+            return enumerator.createCapturer(name, null)
+        }
+        return null
+    }
+
+    fun startVideo(context: Context) {
+        if (videoSource != null) return
+        videoSource = peerConnectionFactory?.createVideoSource(false)
+        videoCapturer = createVideoCapturer(context) ?: return
+        videoCapturer?.initialize(
+            SurfaceTextureHelper.create("CaptureThread", eglBase?.eglBaseContext),
+            context,
+            videoSource?.capturerObserver
+        )
+        videoCapturer?.startCapture(1280, 720, 30)
+        videoTrack = peerConnectionFactory?.createVideoTrack("video_track", videoSource)
+        peerConnection?.addTrack(videoTrack)
+    }
+
+    fun stopVideo() {
+        try {
+            videoCapturer?.stopCapture()
+        } catch (_: Exception) {}
+        videoCapturer?.dispose()
+        videoCapturer = null
+        videoTrack?.dispose()
+        videoTrack = null
+        videoSource?.dispose()
+        videoSource = null
+    }
+
+    fun switchCamera() {
+        (videoCapturer as? CameraVideoCapturer)?.switchCamera(null)
     }
 
     private val handledCallIds = mutableSetOf<String>()
@@ -117,9 +172,10 @@ object RtcManager {
                     if (receiverId != myId) return@forEach
                     val callerId = doc.getString("callerId") ?: return@forEach
                     val callId = doc.id
+                    val isVideo = doc.getString("type") == "video"
                     if (callerId != myId && callId !in handledCallIds) {
                         handledCallIds.add(callId)
-                        _incomingCallFlow.tryEmit(Pair(callerId, callId))
+                        _incomingCallFlow.tryEmit(Triple(callerId, callId, isVideo))
                     }
                 }
             }
@@ -132,17 +188,18 @@ object RtcManager {
         return peerConnectionFactory?.createPeerConnection(config, observer)
     }
 
-    fun startCall(receiverId: String, onStateChange: (CallState) -> Unit) {
+    fun startCall(receiverId: String, isVideo: Boolean = false, onStateChange: (CallState) -> Unit) {
         val callId = "call_${UUID.randomUUID()}"
         currentCallId = callId
         currentPeerId = receiverId
+        this.isVideoCall = isVideo
         onStateChange(CallState.Outgoing(callId, receiverId))
 
         val callData = hashMapOf(
             "callerId" to Session.currentUserId,
             "receiverId" to receiverId,
             "status" to "ringing",
-            "type" to "audio",
+            "type" to if (isVideo) "video" else "audio",
             "createdAt" to FieldValue.serverTimestamp()
         )
         db.collection("calls").document(callId).set(callData)
@@ -181,6 +238,9 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = createPeerConnection(observer)?.apply {
             audioTrack?.let { addTrack(it) }
+            if (isVideoCall) {
+                videoTrack?.let { addTrack(it) }
+            }
             createOffer(object : SdpObserver {
                 override fun onCreateSuccess(sdp: SessionDescription) {
                     setLocalDescription(object : SdpObserver {
@@ -202,9 +262,10 @@ object RtcManager {
         listenForAnswer(callId, onStateChange)
     }
 
-    fun acceptCall(callId: String, callerId: String, onStateChange: (CallState) -> Unit) {
+    fun acceptCall(callId: String, callerId: String, isVideo: Boolean = false, context: Context? = null, onStateChange: (CallState) -> Unit) {
         currentCallId = callId
         currentPeerId = callerId
+        this.isVideoCall = isVideo
         db.collection("calls").document(callId).update("status", "accepted")
 
         val observer = object : PeerConnection.Observer {
@@ -242,6 +303,9 @@ object RtcManager {
         peerConnection?.close()
         peerConnection = pc
         audioTrack?.let { pc?.addTrack(it) }
+        if (isVideoCall) {
+            videoTrack?.let { pc?.addTrack(it) }
+        }
 
         db.collection("calls").document(callId).collection("offer").document("offer").get()
             .addOnSuccessListener { snap ->
@@ -284,6 +348,7 @@ object RtcManager {
     fun endCall(callId: String, onStateChange: ((CallState) -> Unit)? = null) {
         db.collection("calls").document(callId).delete()
         handledCallIds.add(callId)
+        stopVideo()
         peerConnection?.close()
         peerConnection = null
         answerListener?.remove()
@@ -293,6 +358,7 @@ object RtcManager {
         currentCallId = null
         currentPeerId = null
         pendingCandidates.clear()
+        isVideoCall = false
         onStateChange?.invoke(CallState.Ended())
     }
 
@@ -344,10 +410,17 @@ object RtcManager {
 
     fun release() {
         currentCallId?.let { endCall(it) }
+        stopVideo()
+        localRenderer?.release()
+        localRenderer = null
+        remoteRenderer?.release()
+        remoteRenderer = null
         audioTrack?.dispose()
         audioTrack = null
         audioSource?.dispose()
         audioSource = null
+        eglBase?.release()
+        eglBase = null
         peerConnectionFactory?.dispose()
         peerConnectionFactory = null
         incomingCallListener?.remove()

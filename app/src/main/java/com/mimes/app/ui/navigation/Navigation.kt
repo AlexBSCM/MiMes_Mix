@@ -33,9 +33,9 @@ sealed class Screen(val route: String) {
             return route
         }
     }
-    object Call : Screen("call/{peerName}") {
-        fun createRoute(peerName: String): String {
-            return "call/${Uri.encode(peerName)}"
+    object Call : Screen("call/{peerName}/{isVideo}") {
+        fun createRoute(peerName: String, isVideo: Boolean = false): String {
+            return "call/${Uri.encode(peerName)}/$isVideo"
         }
     }
 }
@@ -44,10 +44,10 @@ sealed class Screen(val route: String) {
 fun NavigationGraph(navController: NavHostController, startDestination: String) {
     LaunchedEffect(Unit) {
         RtcManager.initialize(com.mimes.app.MiMesApp.instance)
-        RtcManager.incomingCallFlow.collect { (callerId, callId) ->
+        RtcManager.incomingCallFlow.collect { (callerId, callId, isVideo) ->
             val currentRoute = navController.currentDestination?.route
-            if (currentRoute != Screen.Call.route && currentRoute != "incoming_call/{callerId}/{callId}") {
-                navController.navigate("incoming_call/${Uri.encode(callerId)}/${Uri.encode(callId)}")
+            if (currentRoute != Screen.Call.route && currentRoute != "incoming_call/{callerId}/{callId}/{isVideo}") {
+                navController.navigate("incoming_call/${Uri.encode(callerId)}/${Uri.encode(callId)}/$isVideo")
             }
         }
     }
@@ -104,7 +104,11 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
                     },
                     onCallClick = {
                         Log.d(NAV_TAG, "Audio call to $peerName")
-                        navController.navigate(Screen.Call.createRoute(peerName.removePrefix("@")))
+                        navController.navigate(Screen.Call.createRoute(peerName.removePrefix("@"), false))
+                    },
+                    onVideoCallClick = {
+                        Log.d(NAV_TAG, "Video call to $peerName")
+                        navController.navigate(Screen.Call.createRoute(peerName.removePrefix("@"), true))
                     }
                 )
             } else {
@@ -116,11 +120,16 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
 
         composable(
             route = Screen.Call.route,
-            arguments = listOf(navArgument("peerName") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("peerName") { type = NavType.StringType },
+                navArgument("isVideo") { type = NavType.BoolType }
+            )
         ) { backStackEntry ->
             val peerName = backStackEntry.arguments?.getString("peerName") ?: ""
+            val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
             CallScreen(
                 peerName = peerName,
+                isVideo = isVideo,
                 onEndCall = {
                     navController.popBackStack()
                 }
@@ -128,18 +137,21 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
         }
 
         composable(
-            route = "incoming_call/{callerId}/{callId}",
+            route = "incoming_call/{callerId}/{callId}/{isVideo}",
             arguments = listOf(
                 navArgument("callerId") { type = NavType.StringType },
-                navArgument("callId") { type = NavType.StringType }
+                navArgument("callId") { type = NavType.StringType },
+                navArgument("isVideo") { type = NavType.BoolType }
             )
         ) { backStackEntry ->
             val callerId = backStackEntry.arguments?.getString("callerId") ?: ""
             val callId = backStackEntry.arguments?.getString("callId") ?: ""
+            val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
             CallScreen(
                 peerName = callerId,
                 isIncoming = true,
                 incomingCallId = callId,
+                isVideo = isVideo,
                 onEndCall = {
                     navController.popBackStack(Screen.ChatList.route, inclusive = false)
                 }

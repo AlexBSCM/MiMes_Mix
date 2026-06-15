@@ -16,24 +16,33 @@ class CallViewModel @Inject constructor(application: Application) : AndroidViewM
     private val _peerName = MutableStateFlow("")
     val peerName: StateFlow<String> = _peerName
 
+    private val _isVideo = MutableStateFlow(false)
+    val isVideo: StateFlow<Boolean> = _isVideo
+
+    private val _isCameraOn = MutableStateFlow(true)
+    val isCameraOn: StateFlow<Boolean> = _isCameraOn
+
     init {
         RtcManager.initialize(application)
     }
 
-    fun incomingCall(callerId: String, callId: String) {
+    fun incomingCall(callerId: String, callId: String, video: Boolean = false) {
         _peerName.value = callerId
+        _isVideo.value = video
         _callState.value = CallState.Ringing(callerId, callId)
     }
 
-    fun callUser(userId: String) {
+    fun callUser(userId: String, video: Boolean = false) {
         _peerName.value = userId
-        RtcManager.startCall(userId) { state ->
+        _isVideo.value = video
+        RtcManager.startCall(userId, video) { state ->
             _callState.value = state
         }
     }
 
     fun acceptCall(callId: String, callerId: String) {
-        RtcManager.acceptCall(callId, callerId) { state ->
+        val ctx = getApplication<Application>()
+        RtcManager.acceptCall(callId, callerId, _isVideo.value, ctx) { state ->
             _callState.value = state
         }
     }
@@ -48,6 +57,16 @@ class CallViewModel @Inject constructor(application: Application) : AndroidViewM
         RtcManager.endCall(callId) { state ->
             _callState.value = state
         }
+    }
+
+    fun toggleCamera() {
+        val newState = !_isCameraOn.value
+        _isCameraOn.value = newState
+        RtcManager.videoTrack?.setEnabled(newState)
+    }
+
+    fun switchCamera() {
+        RtcManager.switchCamera()
     }
 
     override fun onCleared() {

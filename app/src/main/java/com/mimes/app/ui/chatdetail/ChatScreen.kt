@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ fun ChatScreen(
     peerName: String,
     onBackClick: () -> Unit,
     onCallClick: () -> Unit = {},
+    onVideoCallClick: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -120,6 +122,9 @@ fun ChatScreen(
                     if (peerName != "Бот") {
                         IconButton(onClick = onCallClick) {
                             Icon(Icons.Filled.Call, contentDescription = "Аудиозвонок")
+                        }
+                        IconButton(onClick = onVideoCallClick) {
+                            Icon(Icons.Filled.Videocam, contentDescription = "Видеозвонок")
                         }
                     }
                 },
