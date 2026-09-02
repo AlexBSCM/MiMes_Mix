@@ -31,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.mimes.app.data.Message
 import com.mimes.app.ui.auth.Session
+import com.mimes.app.util.FormatUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -341,19 +342,11 @@ private fun FileAttachmentBlock(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = formatFileSize(message.fileSize),
+                    text = FormatUtils.formatFileSize(message.fileSize),
                     color = timeColor,
                     fontSize = 10.sp
                 )
             }
         }
-    }
-}
-
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "%.1f MB".format(bytes.toDouble() / (1024 * 1024))
     }
 }

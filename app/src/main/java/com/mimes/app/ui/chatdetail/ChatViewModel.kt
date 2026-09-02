@@ -13,6 +13,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import com.mimes.app.data.Message
+import com.mimes.app.util.ChatUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -49,12 +50,7 @@ class ChatViewModel @Inject constructor() : ViewModel() {
             try {
                 val fileName = getFileName(uri, contentResolver) ?: "file"
                 val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-                val fileType = when {
-                    mimeType.startsWith("image/") -> "image"
-                    mimeType.startsWith("video/") -> "video"
-                    mimeType.startsWith("audio/") -> "audio"
-                    else -> "document"
-                }
+                val fileType = ChatUtils.fileTypeFromMime(mimeType)
                 val inputStream = contentResolver.openInputStream(uri)
                     ?: throw Exception("Не удалось прочитать файл")
                 val bytes = inputStream.use { it.readBytes() }

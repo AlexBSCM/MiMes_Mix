@@ -8,11 +8,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.mimes.app.ui.auth.Session
 import com.mimes.app.data.Message
+import com.mimes.app.util.ChatUtils
+import com.mimes.app.util.FormatUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
 
@@ -58,7 +57,7 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
                 val contacts = snapshot?.get("contacts") as? List<String> ?: emptyList()
                 val lastReadMap = snapshot?.get("lastReadTimestamps") as? Map<String, Any> ?: emptyMap()
                 val chats = contacts.map { contact ->
-                    val chatId = listOf(userId, contact).sorted().joinToString("_")
+                    val chatId = ChatUtils.chatIdFor(userId, contact)
                     val lastRead = lastReadMap[chatId]
                     Chat(id = chatId, name = contact, lastMessage = "", timestamp = "", unreadCount = 0)
                 }
@@ -83,7 +82,7 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
                 if (snapshot.isEmpty) return@addOnSuccessListener
                 val msg = snapshot.documents[0].toObject(Message::class.java) ?: return@addOnSuccessListener
                 val lastMsg = if (msg.text.isNotBlank()) msg.text.take(60) else if (msg.hasFile) "Файл" else ""
-                val ts = msg.timestamp?.let { fmtTime(it) } ?: ""
+                val ts = msg.timestamp?.let { FormatUtils.formatChatTime(it) } ?: ""
 
                 if (lastRead != null && msg.timestamp?.after(lastRead.toDate()) == true) {
                     ref.whereGreaterThan("timestamp", lastRead.toDate())
@@ -102,16 +101,6 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
         _chats.value = _chats.value.map {
             if (it.id == id) it.copy(lastMessage = lastMsg, timestamp = ts, unreadCount = unread) else it
         }
-    }
-
-    private fun fmtTime(date: Date): String {
-        val now = Calendar.getInstance()
-        val cal = Calendar.getInstance().apply { time = date }
-        return if (now.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) &&
-            now.get(Calendar.YEAR) == cal.get(Calendar.YEAR))
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
-        else
-            SimpleDateFormat("dd.MM", Locale.getDefault()).format(date)
     }
 
     fun toggleSearch() {
