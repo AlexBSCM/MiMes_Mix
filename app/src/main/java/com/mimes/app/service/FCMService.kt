@@ -22,6 +22,7 @@ class FCMService : FirebaseMessagingService() {
         private const val TAG = "FCMService"
         const val ACTION_ACCEPT_CALL = "com.mimes.app.action.ACCEPT_CALL"
         const val ACTION_REJECT_CALL = "com.mimes.app.action.REJECT_CALL"
+        const val ACTION_END_CALL = "com.mimes.app.action.END_CALL"
         const val EXTRA_TARGET = "target"
         const val EXTRA_CHAT_ID = "chatId"
         const val EXTRA_PEER_NAME = "peerName"

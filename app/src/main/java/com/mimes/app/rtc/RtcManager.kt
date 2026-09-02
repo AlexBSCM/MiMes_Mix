@@ -1,9 +1,12 @@
 package com.mimes.app.rtc
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mimes.app.service.CallService
 import com.mimes.app.ui.auth.Session
 import kotlinx.coroutines.tasks.await
 import org.webrtc.*
@@ -47,6 +50,19 @@ object RtcManager {
 
     var currentCallId: String? = null
     var currentPeerId: String? = null
+
+    private var callContext: Context? = null
+
+    private fun startForegroundCall(context: Context?) {
+        val ctx = context?.applicationContext ?: return
+        callContext = ctx
+        ContextCompat.startForegroundService(ctx, Intent(ctx, CallService::class.java))
+    }
+
+    private fun stopForegroundCall() {
+        callContext?.stopService(Intent(callContext, CallService::class.java))
+        callContext = null
+    }
 
     private val _incomingCallFlow = kotlinx.coroutines.flow.MutableSharedFlow<Triple<String, String, Boolean>>(replay = 1)
     val incomingCallFlow: kotlinx.coroutines.flow.SharedFlow<Triple<String, String, Boolean>> = _incomingCallFlow
@@ -193,6 +209,7 @@ object RtcManager {
         currentPeerId = receiverId
         this.isVideoCall = isVideo
         onStateChange(CallState.Outgoing(callId, receiverId))
+        startForegroundCall(context)
 
         val callData = hashMapOf(
             "callerId" to Session.currentUserId,
@@ -272,6 +289,7 @@ object RtcManager {
         currentCallId = callId
         currentPeerId = callerId
         this.isVideoCall = isVideo
+        startForegroundCall(context)
         db.collection("calls").document(callId).update("status", "accepted")
 
         val observer = object : PeerConnection.Observer {
@@ -371,6 +389,7 @@ object RtcManager {
         currentPeerId = null
         pendingCandidates.clear()
         isVideoCall = false
+        stopForegroundCall()
         onStateChange?.invoke(CallState.Ended())
     }
 

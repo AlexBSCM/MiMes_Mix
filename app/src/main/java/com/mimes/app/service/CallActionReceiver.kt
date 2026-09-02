@@ -25,6 +25,10 @@ class CallActionReceiver : BroadcastReceiver() {
                         .delete()
                 }
             }
+            FCMService.ACTION_END_CALL -> {
+                Log.d(TAG, "Ending active call from notification")
+                RtcManager.currentCallId?.let { RtcManager.endCall(it) }
+            }
         }
     }
 
