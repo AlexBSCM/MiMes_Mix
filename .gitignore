@@ -43,6 +43,9 @@ backend/.env
 .DS_Store
 Thumbs.db
 
+# === Terabox upload leftovers ===
+*.terabox.uploading.cfg
+
 # === Frontend submodule fix ===
 frontend/.git
 
