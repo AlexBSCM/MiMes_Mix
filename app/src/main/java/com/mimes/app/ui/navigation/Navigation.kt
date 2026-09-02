@@ -1,6 +1,12 @@
 ﻿package com.mimes.app.ui.navigation
 
+import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -19,9 +25,14 @@ import com.mimes.app.ui.auth.AuthScreen
 import com.mimes.app.ui.chat.ChatListScreen
 import com.mimes.app.ui.chatdetail.ChatScreen
 import com.mimes.app.ui.profile.ProfileScreen
-import android.net.Uri
 
 private const val NAV_TAG = "Navigation"
+
+// Анимации переходов между экранами
+private val screenEnter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it / 8 })
+private val screenExit = fadeOut(tween(180))
+private val screenPopEnter = fadeIn(tween(220))
+private val screenPopExit = fadeOut(tween(180)) + slideOutHorizontally(targetOffsetX = { it / 8 })
 
 /** Параметры входящего звонка, переданные из FCM-уведомления. */
 data class IncomingCallInfo(
@@ -93,7 +104,13 @@ fun NavigationGraph(
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        composable(Screen.Auth.route) {
+        composable(
+            Screen.Auth.route,
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
+        ) {
             AuthScreen(
                 onAuthSuccess = {
                     Log.d(NAV_TAG, "Auth success, navigating to ChatList")
@@ -104,7 +121,13 @@ fun NavigationGraph(
             )
         }
 
-        composable(Screen.ChatList.route) {
+        composable(
+            Screen.ChatList.route,
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
+        ) {
             Log.d(NAV_TAG, "ChatList screen loaded")
             ChatListScreen(
                 onChatClick = { chatId, peerName ->
@@ -123,7 +146,13 @@ fun NavigationGraph(
             )
         }
 
-        composable(Screen.Profile.route) {
+        composable(
+            Screen.Profile.route,
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
+        ) {
             ProfileScreen(
                 onBackClick = {
                     Log.d(NAV_TAG, "Back from Profile")
@@ -143,7 +172,11 @@ fun NavigationGraph(
             arguments = listOf(
                 navArgument("chatId") { type = NavType.StringType },
                 navArgument("peerName") { type = NavType.StringType }
-            )
+            ),
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
         ) { backStackEntry ->
             val chatId = backStackEntry.arguments?.getString("chatId")
             val peerName = backStackEntry.arguments?.getString("peerName")
@@ -179,7 +212,11 @@ fun NavigationGraph(
             arguments = listOf(
                 navArgument("peerName") { type = NavType.StringType },
                 navArgument("isVideo") { type = NavType.BoolType }
-            )
+            ),
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
         ) { backStackEntry ->
             val peerName = backStackEntry.arguments?.getString("peerName") ?: ""
             val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
@@ -199,7 +236,11 @@ fun NavigationGraph(
                 navArgument("callId") { type = NavType.StringType },
                 navArgument("isVideo") { type = NavType.BoolType },
                 navArgument("autoAccept") { type = NavType.BoolType; defaultValue = false }
-            )
+            ),
+            enterTransition = { screenEnter },
+            exitTransition = { screenExit },
+            popEnterTransition = { screenPopEnter },
+            popExitTransition = { screenPopExit }
         ) { backStackEntry ->
             val callerId = backStackEntry.arguments?.getString("callerId") ?: ""
             val callId = backStackEntry.arguments?.getString("callId") ?: ""
