@@ -58,6 +58,19 @@ class FCMService : FirebaseMessagingService() {
         return prefs.getString("login", "") ?: ""
     }
 
+    /** Выбирает канал уведомлений согласно настройкам пользователя (звук/вибрация). */
+    private fun channelFor(isCall: Boolean): String {
+        val settings = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val sound = settings.getBoolean("notify_sound", true)
+        val vibration = settings.getBoolean("notify_vibration", true)
+
+        return when {
+            !sound -> if (isCall) MiMesApp.CHANNEL_CALLS_SILENT else MiMesApp.CHANNEL_MESSAGES_SILENT
+            !vibration -> if (isCall) MiMesApp.CHANNEL_CALLS_NO_VIB else MiMesApp.CHANNEL_MESSAGES_NO_VIB
+            else -> if (isCall) MiMesApp.CHANNEL_CALLS else MiMesApp.CHANNEL_MESSAGES
+        }
+    }
+
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         val data = message.data
@@ -100,7 +113,7 @@ class FCMService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, MiMesApp.CHANNEL_MESSAGES)
+        val notification = NotificationCompat.Builder(this, channelFor(isCall = false))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
@@ -150,7 +163,7 @@ class FCMService : FirebaseMessagingService() {
         )
 
         val callType = if (isVideo) "видеозвонок" else "аудиозвонок"
-        val notification = NotificationCompat.Builder(this, MiMesApp.CHANNEL_CALLS)
+        val notification = NotificationCompat.Builder(this, channelFor(isCall = true))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Входящий звонок")
             .setContentText("$callerId — входящий $callType")
