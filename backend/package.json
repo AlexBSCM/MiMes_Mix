@@ -8,7 +8,7 @@
     "start": "node index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
