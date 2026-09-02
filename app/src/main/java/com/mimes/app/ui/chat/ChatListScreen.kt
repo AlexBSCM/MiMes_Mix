@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +35,8 @@ fun ChatListScreen(
     val chats by viewModel.chats.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.error.collectAsState()
     var searchText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -110,9 +113,52 @@ fun ChatListScreen(
             }
 
             // Список чатов
-            items(chats) { chat ->
-                ChatItemRow(chat = chat, onClick = { onChatClick(chat.id, chat.name) })
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (errorMessage != null) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = errorMessage ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(onClick = { viewModel.loadChats() }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+            } else if (chats.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Нет чатов. Найдите собеседника через поиск ↑",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                items(chats) { chat ->
+                    ChatItemRow(chat = chat, onClick = { onChatClick(chat.id, chat.name) })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                }
             }
         }
     }

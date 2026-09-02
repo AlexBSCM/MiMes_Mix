@@ -25,6 +25,12 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
     val chats: StateFlow<List<Chat>> = _chats
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     private val _searchResults = MutableStateFlow<List<String>>(emptyList())
     val searchResults: StateFlow<List<String>> = _searchResults
 
@@ -39,9 +45,16 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
         val userId = Session.currentUserId
         if (userId.isBlank()) return
 
+        _isLoading.value = true
+        _error.value = null
         contactsListener?.remove()
         contactsListener = db.collection("users").document(userId)
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _error.value = error.message ?: "Ошибка загрузки чатов"
+                    _isLoading.value = false
+                    return@addSnapshotListener
+                }
                 val contacts = snapshot?.get("contacts") as? List<String> ?: emptyList()
                 val lastReadMap = snapshot?.get("lastReadTimestamps") as? Map<String, Any> ?: emptyMap()
                 val chats = contacts.map { contact ->
@@ -54,6 +67,7 @@ class ChatListViewModel @Inject constructor() : ViewModel() {
                     Chat(id = "general_chat", name = "Общий чат", lastMessage = "Добро пожаловать в MiMes", timestamp = "", unreadCount = 0)
                 )
                 _chats.value = base + chats
+                _isLoading.value = false
                 base.forEach { fetchChatInfo(it, null) }
                 chats.forEachIndexed { i, chat ->
                     val ls = lastReadMap[chat.id]
