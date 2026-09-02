@@ -22,6 +22,14 @@ import android.net.Uri
 
 private const val NAV_TAG = "Navigation"
 
+/** Параметры входящего звонка, переданные из FCM-уведомления. */
+data class IncomingCallInfo(
+    val callerId: String,
+    val callId: String,
+    val isVideo: Boolean,
+    val autoAccept: Boolean = false
+)
+
 sealed class Screen(val route: String) {
     object Auth : Screen("auth")
     object ChatList : Screen("chat_list")
@@ -38,19 +46,49 @@ sealed class Screen(val route: String) {
             return "call/${Uri.encode(peerName)}/$isVideo"
         }
     }
+    object IncomingCall : Screen("incoming_call/{callerId}/{callId}/{isVideo}/{autoAccept}") {
+        fun createRoute(callerId: String, callId: String, isVideo: Boolean, autoAccept: Boolean = false): String {
+            return "incoming_call/${Uri.encode(callerId)}/${Uri.encode(callId)}/$isVideo/$autoAccept"
+        }
+    }
 }
 
 @Composable
-fun NavigationGraph(navController: NavHostController, startDestination: String) {
+fun NavigationGraph(
+    navController: NavHostController,
+    startDestination: String,
+    openChat: Pair<String, String>? = null,
+    incomingCall: IncomingCallInfo? = null
+) {
     LaunchedEffect(Unit) {
         RtcManager.initialize(com.mimes.app.MiMesApp.instance)
         RtcManager.incomingCallFlow.collect { (callerId, callId, isVideo) ->
             val currentRoute = navController.currentDestination?.route
-            if (currentRoute != Screen.Call.route && currentRoute != "incoming_call/{callerId}/{callId}/{isVideo}") {
-                navController.navigate("incoming_call/${Uri.encode(callerId)}/${Uri.encode(callId)}/$isVideo")
+            if (currentRoute != Screen.Call.route && currentRoute != Screen.IncomingCall.route) {
+                navController.navigate(Screen.IncomingCall.createRoute(callerId, callId, isVideo)) {
+                    launchSingleTop = true
+                }
             }
         }
     }
+
+    // Навигация из FCM-уведомления при холодном старте приложения
+    LaunchedEffect(openChat, incomingCall) {
+        when {
+            incomingCall != null -> navController.navigate(
+                Screen.IncomingCall.createRoute(
+                    incomingCall.callerId,
+                    incomingCall.callId,
+                    incomingCall.isVideo,
+                    incomingCall.autoAccept
+                )
+            ) { launchSingleTop = true }
+            openChat != null -> navController.navigate(
+                Screen.ChatDetail.createRoute(openChat.first, openChat.second)
+            )
+        }
+    }
+
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable(Screen.Auth.route) {
@@ -137,21 +175,24 @@ fun NavigationGraph(navController: NavHostController, startDestination: String) 
         }
 
         composable(
-            route = "incoming_call/{callerId}/{callId}/{isVideo}",
+            route = Screen.IncomingCall.route,
             arguments = listOf(
                 navArgument("callerId") { type = NavType.StringType },
                 navArgument("callId") { type = NavType.StringType },
-                navArgument("isVideo") { type = NavType.BoolType }
+                navArgument("isVideo") { type = NavType.BoolType },
+                navArgument("autoAccept") { type = NavType.BoolType; defaultValue = false }
             )
         ) { backStackEntry ->
             val callerId = backStackEntry.arguments?.getString("callerId") ?: ""
             val callId = backStackEntry.arguments?.getString("callId") ?: ""
             val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
+            val autoAccept = backStackEntry.arguments?.getBoolean("autoAccept") ?: false
             CallScreen(
                 peerName = callerId,
                 isIncoming = true,
                 incomingCallId = callId,
                 isVideo = isVideo,
+                autoAccept = autoAccept,
                 onEndCall = {
                     navController.popBackStack(Screen.ChatList.route, inclusive = false)
                 }

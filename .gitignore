@@ -39,6 +39,10 @@ backend/dist/
 backend/.env
 *.log
 
+# === Cloud Functions (Node) ===
+functions/node_modules/
+functions/lib/
+
 # === System files ===
 .DS_Store
 Thumbs.db

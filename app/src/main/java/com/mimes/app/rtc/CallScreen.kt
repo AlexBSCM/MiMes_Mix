@@ -33,6 +33,7 @@ fun CallScreen(
     isIncoming: Boolean = false,
     incomingCallId: String = "",
     isVideo: Boolean = false,
+    autoAccept: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
     onEndCall: () -> Unit
 ) {
@@ -64,7 +65,12 @@ fun CallScreen(
 
     LaunchedEffect(Unit) {
         if (isIncoming && incomingCallId.isNotBlank()) {
-            viewModel.incomingCall(if (peerName.startsWith("@")) peerName else "@$peerName", incomingCallId, isVideo)
+            viewModel.incomingCall(
+                if (peerName.startsWith("@")) peerName else "@$peerName",
+                incomingCallId,
+                isVideo,
+                autoAccept
+            )
         } else if (peerName.isNotBlank()) {
             viewModel.callUser(if (peerName.startsWith("@")) peerName else "@$peerName", isVideo)
         }

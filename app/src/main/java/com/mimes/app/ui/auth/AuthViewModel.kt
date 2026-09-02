@@ -1,19 +1,40 @@
 ﻿package com.mimes.app.ui.auth
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @dagger.hilt.android.lifecycle.HiltViewModel
-class AuthViewModel @javax.inject.Inject constructor() : ViewModel() {
+class AuthViewModel @javax.inject.Inject constructor(application: Application) : AndroidViewModel(application) {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+    private val prefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
+
+    private fun persistSession(login: String) {
+        Session.currentUserId = login
+        prefs.edit().putString("login", login).apply()
+    }
+
+    /** Сохраняет FCM-токен устройства в профиле пользователя для отправки push. */
+    private fun saveFcmToken(login: String) {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val token = task.result
+                db.collection("users").document(login)
+                    .update("fcmToken", token)
+                    .addOnFailureListener { }
+            }
+        }
+    }
 
     private suspend fun ensureFirebaseAuth() {
         if (auth.currentUser == null) {
@@ -41,7 +62,8 @@ class AuthViewModel @javax.inject.Inject constructor() : ViewModel() {
                 if (doc.exists()) {
                     val storedPassword = doc.getString("password") ?: ""
                     if (storedPassword == password) {
-                        Session.currentUserId = login
+                        persistSession(login)
+                        saveFcmToken(login)
                         _authState.value = AuthState.Success(login)
                     } else {
                         _authState.value = AuthState.Error("Неверный пароль")
@@ -78,7 +100,8 @@ class AuthViewModel @javax.inject.Inject constructor() : ViewModel() {
                     "createdAt" to FieldValue.serverTimestamp()
                 )
                 db.collection("users").document(login).set(user).await()
-                Session.currentUserId = login
+                persistSession(login)
+                saveFcmToken(login)
                 _authState.value = AuthState.Success(login)
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(e.message ?: "Ошибка регистрации")
@@ -88,6 +111,7 @@ class AuthViewModel @javax.inject.Inject constructor() : ViewModel() {
 
     fun signOut() {
         Session.currentUserId = ""
+        prefs.edit().clear().apply()
         _authState.value = AuthState.Idle
     }
 }

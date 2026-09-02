@@ -66,6 +66,11 @@
             </intent-filter>
         </service>
 
+        <!-- Обработка действий из уведомлений (отклонить звонок) -->
+        <receiver
+            android:name=".service.CallActionReceiver"
+            android:exported="false" />
+
         <!-- Foreground Service для звонков -->
         <service
             android:name=".service.CallService"

@@ -11,6 +11,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mimes.app.MiMesApp
 import com.mimes.app.MainActivity
+import com.mimes.app.R
 import com.mimes.app.ui.auth.Session
 
 class FCMService : FirebaseMessagingService() {

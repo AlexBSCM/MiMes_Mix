@@ -26,10 +26,13 @@ class CallViewModel @Inject constructor(application: Application) : AndroidViewM
         RtcManager.initialize(application)
     }
 
-    fun incomingCall(callerId: String, callId: String, video: Boolean = false) {
+    fun incomingCall(callerId: String, callId: String, video: Boolean = false, autoAccept: Boolean = false) {
         _peerName.value = callerId
         _isVideo.value = video
         _callState.value = CallState.Ringing(callerId, callId)
+        if (autoAccept) {
+            acceptCall(callId, callerId)
+        }
     }
 
     fun callUser(userId: String, video: Boolean = false) {
