@@ -52,6 +52,9 @@ Thumbs.db
 
 # === Frontend submodule fix ===
 frontend/.git
+frontend/dist/
+frontend/.expo/
+frontend/node_modules/
 
 backend/dev.db
 local.properties

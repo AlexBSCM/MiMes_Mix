@@ -1,6 +1,7 @@
 # 🗺️ План разработки FireChat — Android Мессенджер
 
 > **Стек:** Kotlin · Jetpack Compose · Firebase · WebRTC  
+> **Backend:** Node.js · Express · Prisma · Socket.IO  
 > **Статус этапов:** ⬜ не начат · 🔄 в процессе · ✅ завершён
 
 ---
